@@ -82,6 +82,19 @@ mpfr_unary_op!(mpfr_atanh, mpfr::atanh);
 mpfr_unary_op!(mpfr_erf, mpfr::erf);
 mpfr_unary_op!(mpfr_erfc, mpfr::erfc);
 
+// Gamma functions
+pub fn mpfr_lgamma(input: &Float, out: &mut Float, rnd: Round) -> bool {
+    let mut sign = 0;
+    unsafe {
+        mpfr::lgamma(
+            out.as_raw_mut(),
+            &mut sign,
+            input.as_raw(),
+            to_mpfr_round(rnd),
+        ) == 0
+    }
+}
+
 // Rounding functions
 mpfr_unary_op!(mpfr_rint, mpfr::rint);
 
@@ -99,15 +112,36 @@ mpfr_binary_op!(mpfr_fmod, mpfr::fmod);
 mpfr_binary_op!(mpfr_remainder, mpfr::remainder);
 
 pub fn mpfr_cosu(x: &Float, n: u64, out: &mut Float, rnd: Round) -> bool {
-    unsafe { mpfr::cosu(out.as_raw_mut(), x.as_raw(), n as c_ulong, to_mpfr_round(rnd)) == 0 }
+    unsafe {
+        mpfr::cosu(
+            out.as_raw_mut(),
+            x.as_raw(),
+            n as c_ulong,
+            to_mpfr_round(rnd),
+        ) == 0
+    }
 }
 
 pub fn mpfr_sinu(x: &Float, n: u64, out: &mut Float, rnd: Round) -> bool {
-    unsafe { mpfr::sinu(out.as_raw_mut(), x.as_raw(), n as c_ulong, to_mpfr_round(rnd)) == 0 }
+    unsafe {
+        mpfr::sinu(
+            out.as_raw_mut(),
+            x.as_raw(),
+            n as c_ulong,
+            to_mpfr_round(rnd),
+        ) == 0
+    }
 }
 
 pub fn mpfr_tanu(x: &Float, n: u64, out: &mut Float, rnd: Round) -> bool {
-    unsafe { mpfr::tanu(out.as_raw_mut(), x.as_raw(), n as c_ulong, to_mpfr_round(rnd)) == 0 }
+    unsafe {
+        mpfr::tanu(
+            out.as_raw_mut(),
+            x.as_raw(),
+            n as c_ulong,
+            to_mpfr_round(rnd),
+        ) == 0
+    }
 }
 
 pub fn mpfr_pi(out: &mut Float, rnd: Round) -> bool {
@@ -163,7 +197,13 @@ pub fn mpfr_round_inplace(x: &mut Float) -> bool {
 }
 
 pub fn mpfr_round(input: &Float, out: &mut Float, _rnd: Round) -> bool {
-    unsafe { mpfr::rint(out.as_raw_mut(), input.as_raw(), to_mpfr_round(Round::Nearest)) == 0 }
+    unsafe {
+        mpfr::rint(
+            out.as_raw_mut(),
+            input.as_raw(),
+            to_mpfr_round(Round::Nearest),
+        ) == 0
+    }
 }
 
 pub fn mpfr_trunc(input: &Float, out: &mut Float, _rnd: Round) -> bool {

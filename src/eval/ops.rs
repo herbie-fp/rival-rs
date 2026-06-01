@@ -424,6 +424,16 @@ def_ops! {
             bounds: |ctx, _, _| AmplBounds::new(get_slack(ctx.iteration, ctx.slack_unit), 0),
         },
 
+        Lgamma: {
+            method: lgamma_assign,
+            bounds: |ctx, _, _| AmplBounds::new(get_slack(ctx.iteration, ctx.slack_unit), 0),
+        },
+
+        Tgamma: {
+            method: tgamma_assign,
+            bounds: |ctx, _, _| AmplBounds::new(get_slack(ctx.iteration, ctx.slack_unit), 0),
+        },
+
         Rint: {
             method: rint_assign,
             bounds: |ctx, _, _| AmplBounds::new(get_slack(ctx.iteration, ctx.slack_unit), 0),

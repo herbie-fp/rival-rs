@@ -238,6 +238,8 @@ fn sexpr_to_expr(sexpr: SExpr, vars: &[String]) -> Result<Expr, String> {
                 )),
                 ("erf", 1) => Ok(Expr::Erf(Box::new(args[0].clone()))),
                 ("erfc", 1) => Ok(Expr::Erfc(Box::new(args[0].clone()))),
+                ("lgamma", 1) => Ok(Expr::Lgamma(Box::new(args[0].clone()))),
+                ("tgamma", 1) => Ok(Expr::Tgamma(Box::new(args[0].clone()))),
                 ("floor", 1) => Ok(Expr::Floor(Box::new(args[0].clone()))),
                 ("ceil", 1) => Ok(Expr::Ceil(Box::new(args[0].clone()))),
                 ("round", 1) => Ok(Expr::Round(Box::new(args[0].clone()))),

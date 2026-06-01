@@ -148,6 +148,8 @@
 (define-rival rival_expr_atanh (_fun _pointer _uint32 -> _uint32))
 (define-rival rival_expr_erf (_fun _pointer _uint32 -> _uint32))
 (define-rival rival_expr_erfc (_fun _pointer _uint32 -> _uint32))
+(define-rival rival_expr_lgamma (_fun _pointer _uint32 -> _uint32))
+(define-rival rival_expr_tgamma (_fun _pointer _uint32 -> _uint32))
 (define-rival rival_expr_rint (_fun _pointer _uint32 -> _uint32))
 (define-rival rival_expr_round (_fun _pointer _uint32 -> _uint32))
 (define-rival rival_expr_ceil (_fun _pointer _uint32 -> _uint32))
@@ -303,6 +305,8 @@
           'atanh rival_expr_atanh
           'erf rival_expr_erf
           'erfc rival_expr_erfc
+          'lgamma rival_expr_lgamma
+          'tgamma rival_expr_tgamma
           'rint rival_expr_rint
           'round rival_expr_round
           'ceil rival_expr_ceil

@@ -89,6 +89,10 @@
         (make-op 'real '(real))
         'erfc
         (make-op 'real '(real))
+        'lgamma
+        (make-op 'real '(real))
+        'tgamma
+        (make-op 'real '(real))
         'rint
         (make-op 'real '(real))
         'round

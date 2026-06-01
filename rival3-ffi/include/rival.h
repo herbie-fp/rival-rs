@@ -188,6 +188,10 @@ uint32_t rival_expr_erf(struct RivalExprArena *arena, uint32_t x);
 
 uint32_t rival_expr_erfc(struct RivalExprArena *arena, uint32_t x);
 
+uint32_t rival_expr_lgamma(struct RivalExprArena *arena, uint32_t x);
+
+uint32_t rival_expr_tgamma(struct RivalExprArena *arena, uint32_t x);
+
 uint32_t rival_expr_rint(struct RivalExprArena *arena, uint32_t x);
 
 uint32_t rival_expr_round(struct RivalExprArena *arena, uint32_t x);

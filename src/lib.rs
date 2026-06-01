@@ -28,7 +28,7 @@
 //!     fn distance(&self, _: usize, lo: &Float, hi: &Float) -> usize { 0 }
 //! }
 //! impl Clone for Fp64Disc { fn clone(&self) -> Self { Fp64Disc } }
-//! 
+//!
 //! let expr = Expr::Sub(
 //!     Box::new(Expr::Sin(Box::new(Expr::Var("x".into())))),
 //!     Box::new(Expr::Sub(

@@ -31,7 +31,7 @@ common mathematical constants:
    (code:line log log2 log10 log1p logb)
    (code:line sin cos tan asin acos atan atan2)
    (code:line sinh cosh tanh asinh acosh atanh)
-   (code:line erf erfc)
+   (code:line erf erfc lgamma tgamma)
    (code:line fmod remainder rint round ceil floor trunc)
    (code:line fmin fmax copysign fdim)
    (code:line < <= > >= == !=)

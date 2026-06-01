@@ -38,6 +38,8 @@ pub(crate) enum ArenaNode {
     Atanh(u32),
     Erf(u32),
     Erfc(u32),
+    Lgamma(u32),
+    Tgamma(u32),
     Rint(u32),
     Round(u32),
     Ceil(u32),
@@ -152,6 +154,8 @@ impl RivalExprArena {
             ArenaNode::Atanh(x) => Expr::Atanh(Box::new(self.materialize(*x)?)),
             ArenaNode::Erf(x) => Expr::Erf(Box::new(self.materialize(*x)?)),
             ArenaNode::Erfc(x) => Expr::Erfc(Box::new(self.materialize(*x)?)),
+            ArenaNode::Lgamma(x) => Expr::Lgamma(Box::new(self.materialize(*x)?)),
+            ArenaNode::Tgamma(x) => Expr::Tgamma(Box::new(self.materialize(*x)?)),
             ArenaNode::Rint(x) => Expr::Rint(Box::new(self.materialize(*x)?)),
             ArenaNode::Round(x) => Expr::Round(Box::new(self.materialize(*x)?)),
             ArenaNode::Ceil(x) => Expr::Ceil(Box::new(self.materialize(*x)?)),
@@ -603,6 +607,16 @@ pub unsafe extern "C" fn rival_expr_erf(arena: *mut RivalExprArena, x: u32) -> u
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_expr_erfc(arena: *mut RivalExprArena, x: u32) -> u32 {
     unsafe { arena_unary(arena, x, ArenaNode::Erfc) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rival_expr_lgamma(arena: *mut RivalExprArena, x: u32) -> u32 {
+    unsafe { arena_unary(arena, x, ArenaNode::Lgamma) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rival_expr_tgamma(arena: *mut RivalExprArena, x: u32) -> u32 {
+    unsafe { arena_unary(arena, x, ArenaNode::Tgamma) }
 }
 
 #[unsafe(no_mangle)]
