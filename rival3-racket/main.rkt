@@ -508,7 +508,9 @@
      (for/vector #:length n-outs
                  ([bf (in-vector out-bfs)]
                   [disc (in-list discs)])
-       ((discretization-convert disc) bf))]
+       (if (bfnan? bf)
+           'invalid
+           ((discretization-convert disc) bf)))]
     ['invalid_input (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt))]
     ['unsamplable (raise (exn:rival:unsamplable "Unsamplable input" (current-continuation-marks) pt))]
     [else (error error-name "Unknown result code: ~a" status-code)]))

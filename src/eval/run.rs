@@ -405,20 +405,26 @@ impl<D: Discretization> Machine<D> {
         Ok(None)
     }
 
-    /// Compute (good, done, bad, stuck) flags and update output_distance like Racket's rival-machine-return.
+    /// Compute (good, done, bad, stuck) flags and update output_distance.
     fn return_flags(&mut self) -> (bool, bool, bool, bool) {
-        let mut good = true;
+        let mut good = self.outputs.is_empty();
         let mut done = true;
-        let mut bad = false;
+        let mut bad = !self.outputs.is_empty();
         let mut stuck = false;
 
         for (idx, &root) in self.outputs.iter().enumerate() {
             let value = &self.registers[root];
+            bad &= value.err.total;
+            good |= !value.err.partial;
+            self.output_distance[idx] = false;
+
             if value.err.total {
-                bad = true;
-            } else if value.err.partial {
-                good = false;
+                continue;
             }
+            if value.err.partial {
+                done = false;
+            }
+
             let lo = self.disc.convert(idx, value.lo.as_float());
             let hi = self.disc.convert(idx, value.hi.as_float());
             let dist = self.disc.distance(idx, &lo, &hi);

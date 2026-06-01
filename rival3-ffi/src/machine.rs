@@ -157,7 +157,11 @@ unsafe fn write_outputs(
         }
     }
     for (i, val) in outputs.iter().enumerate() {
-        unsafe { mpfr::set(out_ptrs[i], val.lo().as_raw(), mpfr::rnd_t::RNDN) };
+        if val.error_flags().total() {
+            unsafe { mpfr::set_nan(out_ptrs[i]) };
+        } else {
+            unsafe { mpfr::set(out_ptrs[i], val.lo().as_raw(), mpfr::rnd_t::RNDN) };
+        }
     }
     Ok(())
 }
