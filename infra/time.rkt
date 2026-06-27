@@ -23,6 +23,12 @@
 (define (read-from-string s)
   (read (open-input-string s)))
 
+(define (flonum-result->status exs)
+  (match exs
+    ['invalid (list 'invalid #f)]
+    [(? flonum?) (list 'valid exs)]
+    [_ (error 'time-expr "Expected a flonum result or 'invalid, got ~e" exs)]))
+
 (define (time-expr rec timeline sollya-reeval)
   (define exprs (map read-from-string (hash-ref rec 'exprs)))
   (define vars (map read-from-string (hash-ref rec 'vars)))
@@ -67,7 +73,7 @@
           (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
                           [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
             (define exs (vector-ref (baseline-apply baseline-machine (list->vector (map bf pt))) 1))
-            (list 'valid exs))))
+            (flonum-result->status exs))))
       (define baseline-apply-time (- (current-inexact-milliseconds) baseline-start-apply))
       (define baseline-executions (rival-profile baseline-machine 'executions))
       (define baseline-iteration (rival-profile baseline-machine 'iterations))
@@ -106,7 +112,7 @@
           (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
                           [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
             (define exs (vector-ref (rival-apply rival-machine (list->vector (map bf pt))) 1))
-            (list 'valid exs))))
+            (flonum-result->status exs))))
       (define rival-apply-time (- (current-inexact-milliseconds) rival-start-apply))
       (define rival-iter (rival-profile rival-machine 'iterations))
       (define rival-executions (rival-profile rival-machine 'executions))
