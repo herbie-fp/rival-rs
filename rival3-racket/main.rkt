@@ -513,7 +513,7 @@
                  ([bf (in-vector out-bfs)]
                   [disc (in-list discs)])
        (if (bfnan? bf)
-           'invalid
+           (raise (exn:rival:invalid "Invalid output" (current-continuation-marks) pt))
            ((discretization-convert disc) bf)))]
     ['invalid_input (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt))]
     ['unsamplable (raise (exn:rival:unsamplable "Unsamplable input" (current-continuation-marks) pt))]
