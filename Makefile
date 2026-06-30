@@ -22,10 +22,10 @@ package: build
 	@if [ -f "$(PKG_DIR).zip.CHECKSUM" ]; then mv -f $(PKG_DIR).zip.CHECKSUM $(PKG_NAME).zip.CHECKSUM; fi
 
 install: build
-	raco pkg install --user --batch --auto -D --type dir --link --name $(PKG_NAME) --skip-installed $(PKG_DIR)
+	raco pkg install --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR)
 
 update: build
-	raco pkg update --user --batch --auto -D --type dir --link --name $(PKG_NAME) --skip-uninstalled $(PKG_DIR)
+	raco pkg update --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR)
 
 uninstall:
 	raco pkg remove --user --batch --auto --force --no-docs $(PKG_NAME)
