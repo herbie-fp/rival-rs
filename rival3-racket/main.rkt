@@ -30,6 +30,7 @@
          rival-machine?
          rival-hints?
          *rival-max-precision*
+         *rival-max-iterations*  ;; TODO: to delete
          *rival-profile-executions*
          execution-name
          execution-number
@@ -67,6 +68,7 @@
 (define flonum-discretization (discretization 'f64 53 bigfloat->flonum))
 
 (define *rival-max-precision* (make-parameter 10000))
+(define *rival-max-iterations* (make-parameter 5))  ;; TODO: to delete
 (define *rival-profile-executions* (make-parameter 1000))
 
 (define-runtime-path native-root (build-path "private" "native"))
