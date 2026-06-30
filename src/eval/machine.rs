@@ -143,7 +143,7 @@ impl<D: Discretization> MachineBuilder<D> {
             disc,
             min_precision: 20,
             max_precision: 10_000,
-            slack_unit: 512,
+            slack_unit: 53,
             base_tuning_precision: 5,
             ampl_tuning_bits: 2,
             profile_capacity: 1000,

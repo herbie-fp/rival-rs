@@ -202,18 +202,11 @@ re-executing instructions whose precision needs haven't changed.
 
 @deftogether[(
   @defparam[*rival-max-precision* precision natural? #:value 10000]
-  @defparam[*rival-max-iterations* iterations natural? #:value 5]
 )]
 
-Sets the maximum precision used by Rival internally and the maximum
-iterations performed by Rival before raising the
-@racket[exn:rival:unsamplable] error. Note that Rival will stop at
-whichever of @racket[*rival-max-precision*] or
-@racket[*rival-max-iterations*] is hit first. For example, Rival may
-execute the maximum number of iterations before reaching the maximum
-precision, or choose to use a precision over the maximum before
-reaching the maximum number of iterations. The default values are
-likely sufficient for most use cases.
+Sets the maximum precision used by Rival internally before raising the
+@racket[exn:rival:unsamplable] error. The default value is likely
+sufficient for most use cases.
 
 @defproc[
   (rival-analyze

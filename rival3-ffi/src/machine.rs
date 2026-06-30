@@ -175,8 +175,7 @@ unsafe fn apply_inner(
     n_out: usize,
     hints: *const RivalHints,
     max_precision: u32,
-    // Determines whether to use use apply or apply_baseline.
-    max_iterations: Option<usize>,
+    baseline: bool,
 ) -> RivalError {
     if n_args != wrapper.n_vars || n_out != wrapper.n_exprs {
         return RivalError::InvalidInput;
@@ -195,9 +194,10 @@ unsafe fn apply_inner(
     wrapper.machine.set_max_precision(max_precision);
     let hints_opt = unsafe { extract_hints(hints) };
 
-    let result = match max_iterations {
-        Some(iters) => wrapper.machine.apply(&wrapper.arg_buf, hints_opt, iters),
-        None => wrapper.machine.apply_baseline(&wrapper.arg_buf, hints_opt),
+    let result = if baseline {
+        wrapper.machine.apply_baseline(&wrapper.arg_buf, hints_opt)
+    } else {
+        wrapper.machine.apply(&wrapper.arg_buf, hints_opt)
     };
 
     match result {
@@ -376,7 +376,6 @@ pub unsafe extern "C" fn rival_apply(
     out: *const *mut mpfr_t,
     n_out: usize,
     hints: *const RivalHints,
-    max_iterations: usize,
     max_precision: u32,
 ) -> RivalError {
     if machine.is_null() || out.is_null() || (args.is_null() && n_args > 0) {
@@ -393,7 +392,7 @@ pub unsafe extern "C" fn rival_apply(
             n_out,
             hints,
             max_precision,
-            Some(max_iterations),
+            false,
         )
     }
 }
@@ -422,7 +421,7 @@ pub unsafe extern "C" fn rival_apply_baseline(
             n_out,
             hints,
             max_precision,
-            None,
+            true,
         )
     }
 }

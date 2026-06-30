@@ -22,9 +22,6 @@ impl<D: Discretization> Machine<D> {
     /// [`Machine::analyze_with_hints`] to speed up evaluation.
     /// Pass `None` for default behavior.
     ///
-    /// `max_iterations` sets the maximum number of re-evaluation
-    /// iterations before giving up.
-    ///
     /// # Errors
     ///
     /// Returns [`RivalError::InvalidInput`] if the point is an
@@ -36,12 +33,7 @@ impl<D: Discretization> Machine<D> {
     /// that it has correctly-rounded the output. It will only
     /// return `InvalidInput` if it can prove that at least one
     /// output expression in the machine throws on the given input.
-    pub fn apply(
-        &mut self,
-        args: &[Ival],
-        hint: Option<&[Hint]>,
-        max_iterations: usize,
-    ) -> Result<Vec<Ival>, RivalError> {
+    pub fn apply(&mut self, args: &[Ival], hint: Option<&[Hint]>) -> Result<Vec<Ival>, RivalError> {
         self.load_arguments(args);
         let hint_storage;
         let hint_slice: &[Hint] = if let Some(h) = hint {
@@ -496,7 +488,7 @@ mod tests {
         x.f64_assign(-1.0);
 
         assert!(matches!(
-            machine.apply(&[x], None, 1),
+            machine.apply(&[x], None),
             Err(RivalError::InvalidInput)
         ));
     }

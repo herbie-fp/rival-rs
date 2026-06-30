@@ -21,7 +21,7 @@ The currently-supported command symbols and their return values are:
 
 @itemlist[
 @item{@code{instructions} returns the number of register machine instructions in the compiled @racket[machine].}
-@item{@code{iterations} returns the number of re-evaluation iterations needed for the most recent call to @racket[rival-apply] with the compiled @racket[machine]. This should be a number from 0 to @racket[*rival-max-iterations*], inclusive.}
+@item{@code{iterations} returns the number of re-evaluation iterations needed for the most recent call to @racket[rival-apply] with the compiled @racket[machine].}
 @item{@code{bumps} returns the number of unexpected non-convergences detected during the most recent call to @racket[rival-apply] with the compiled @racket[machine]. These generally represent internal errors in Rival. While Rival will attempt to handle these "bumps" smoothly, they should still be reported to the developers as a bug.}
 @item{@code{executions} returns a list of values from which you can obtain execution metadata using the accessor functions @racket[execution-name], @racket[execution-number], @racket[execution-precision], @racket[execution-time], @racket[execution-memory], and @racket[execution-iteration]. These executions are stored in a fixed-size buffer (see @racket[*rival-profile-executions*]) which is retained across @racket[rival-apply] calls and can fill up. The buffer is emptied by calls to @racket[(rival-profile machine 'executions)], so make sure to call this function regularly. If the list of @racket{execution}s returned by @racket[rival-profile] is equal in length to @racket[*rival-profile-executions*], you likely filled the buffer and are missing some executions.}
 @item{@code{summary} returns a list of @racket[(list summary bumps iterations)] where @racket[summary] is a vector of aggregated entries, each of the form @racket[(list name prec-bucket time-ms count)].}
@@ -74,4 +74,3 @@ change the size of this struct, set the
 changed.
 
 }
-

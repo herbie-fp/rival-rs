@@ -30,7 +30,6 @@
          rival-machine?
          rival-hints?
          *rival-max-precision*
-         *rival-max-iterations*
          *rival-profile-executions*
          execution-name
          execution-number
@@ -68,7 +67,6 @@
 (define flonum-discretization (discretization 'f64 53 bigfloat->flonum))
 
 (define *rival-max-precision* (make-parameter 10000))
-(define *rival-max-iterations* (make-parameter 5))
 (define *rival-profile-executions* (make-parameter 1000))
 
 (define-runtime-path native-root (build-path "private" "native"))
@@ -199,7 +197,7 @@
 (define-rival rival_machine_get_profiling (_fun _pointer -> _rival-profiling-mode))
 
 (define-rival rival_apply
-              (_fun _pointer _pointer _size _pointer _size _pointer _size _uint32 -> _rival-error))
+              (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
 
 (define-rival rival_apply_baseline
               (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
@@ -220,8 +218,8 @@
               (_fun _pointer (out : (_ptr o _size)) -> (ptr : _pointer) -> (values ptr out)))
 
 (let ([v (rival_version)])
-  (unless (= v 1)
-    (error 'rival3 "ABI version mismatch: expected 1, got ~a" v)))
+  (unless (= v 2)
+    (error 'rival3 "ABI version mismatch: expected 2, got ~a" v)))
 
 (struct machine-wrapper (ptr n-vars n-exprs discs arg-buf arg-bfs out-buf out-bfs rect-buf name-table)
   #:property prop:cpointer
@@ -524,7 +522,7 @@
                pt
                hints
                (lambda (m a na o no h)
-                 (rival_apply m a na o no h (*rival-max-iterations*) (*rival-max-precision*)))
+                 (rival_apply m a na o no h (*rival-max-precision*)))
                'rival-apply))
 
 (define (baseline-apply machine pt [hints #f])

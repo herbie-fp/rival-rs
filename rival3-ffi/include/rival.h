@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include "mpfr.h"
 
-#define RIVAL_ABI_VERSION 1
+#define RIVAL_ABI_VERSION 2
 
 #define RIVAL_EXPR_INVALID UINT32_MAX
 
@@ -289,7 +289,6 @@ RivalError rival_apply(struct RivalMachine *machine,
                        mpfr_t *const *out,
                        uintptr_t n_out,
                        const struct RivalHints *hints,
-                       uintptr_t max_iterations,
                        uint32_t max_precision);
 
 RivalError rival_apply_baseline(struct RivalMachine *machine,
