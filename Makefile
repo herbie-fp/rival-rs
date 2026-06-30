@@ -2,7 +2,7 @@ PKG_DIR := rival3-racket
 PKG_NAME := rival3
 FFI_MANIFEST := rival3-ffi/Cargo.toml
 
-PLATFORM := $(shell racket -e "(display (path->string (system-library-subpath \#f)))" | tr '\\\\' '/')
+PLATFORM := $(shell racket -e "(display (path->string (system-library-subpath (not 1))))" | tr '\\\\' '/')
 LIB_NAME := $(shell racket -e "(display (string-append (if (eq? (system-type) 'windows) \"rival3_ffi\" \"librival3_ffi\") (bytes->string/utf-8 (system-type 'so-suffix))))")
 
 FFI_BUILD := rival3-ffi/target/release/$(LIB_NAME)
@@ -22,7 +22,11 @@ package: build
 	@if [ -f "$(PKG_DIR).zip.CHECKSUM" ]; then mv -f $(PKG_DIR).zip.CHECKSUM $(PKG_NAME).zip.CHECKSUM; fi
 
 install: build
-	raco pkg install --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR)
+	@if raco pkg show --user $(PKG_NAME) | awk 'NR == 2 { print $$1 }' | grep -qx $(PKG_NAME); then \
+		raco pkg update --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR); \
+	else \
+		raco pkg install --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR); \
+	fi
 
 update: build
 	raco pkg update --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR)
