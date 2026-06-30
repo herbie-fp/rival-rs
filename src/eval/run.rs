@@ -51,13 +51,13 @@ impl<D: Discretization> Machine<D> {
             &hint_storage
         };
 
-        for iteration in 0..max_iterations {
+        let mut iteration = 0;
+        loop {
             if let Some(results) = self.run_iteration(iteration, hint_slice)? {
                 return Ok(results);
             }
+            iteration = iteration.saturating_add(1);
         }
-
-        Err(RivalError::Unsamplable)
     }
 
     /// Evaluate the machine using the baseline strategy.
@@ -407,37 +407,32 @@ impl<D: Discretization> Machine<D> {
 
     /// Compute (good, done, bad, stuck) flags and update output_distance.
     fn return_flags(&mut self) -> (bool, bool, bool, bool) {
-        let mut good = self.outputs.is_empty();
+        let mut good = true;
         let mut done = true;
-        let mut bad = !self.outputs.is_empty();
+        let mut bad = false;
         let mut stuck = false;
 
         for (idx, &root) in self.outputs.iter().enumerate() {
             let value = &self.registers[root];
-            bad &= value.err.total;
-            good |= !value.err.partial;
-            self.output_distance[idx] = false;
-
-            if value.err.total {
-                continue;
-            }
-            if value.err.partial {
-                done = false;
-            }
-
             let lo = self.disc.convert(idx, value.lo.as_float());
             let hi = self.disc.convert(idx, value.hi.as_float());
             let dist = self.disc.distance(idx, &lo, &hi);
-            self.output_distance[idx] = dist == 1;
             if dist != 0 {
                 done = false;
                 if value.lo.immovable && value.hi.immovable {
                     stuck = true;
                 }
             }
+
+            if value.err.total {
+                bad = true;
+            } else if value.err.partial {
+                good = false;
+            }
+            self.output_distance[idx] = dist == 1;
         }
 
-        (good, done, bad, stuck)
+        (good, good && done, bad, stuck)
     }
 }
 
@@ -459,4 +454,50 @@ pub enum RivalError {
     /// configured precision and iteration limits.
     #[error("Unsamplable input for rival machine")]
     Unsamplable,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RivalError;
+    use crate::{
+        eval::{
+            ast::Expr,
+            machine::{Discretization, MachineBuilder},
+        },
+        interval::Ival,
+    };
+    use rug::Float;
+
+    #[derive(Clone)]
+    struct TestDisc;
+
+    impl Discretization for TestDisc {
+        fn target(&self) -> u32 {
+            53
+        }
+
+        fn convert(&self, _idx: usize, value: &Float) -> Float {
+            value.clone()
+        }
+
+        fn distance(&self, _idx: usize, _lo: &Float, _hi: &Float) -> usize {
+            0
+        }
+    }
+
+    #[test]
+    fn apply_rejects_point_when_any_output_is_totally_invalid() {
+        let sqrt_x = Expr::Sqrt(Box::new(Expr::Var("x".into())));
+        let x_expr = Expr::Var("x".into());
+        let mut machine =
+            MachineBuilder::new(TestDisc).build(vec![sqrt_x, x_expr], vec!["x".into()]);
+
+        let mut x = Ival::zero(machine.argument_precision());
+        x.f64_assign(-1.0);
+
+        assert!(matches!(
+            machine.apply(&[x], None, 1),
+            Err(RivalError::InvalidInput)
+        ));
+    }
 }
