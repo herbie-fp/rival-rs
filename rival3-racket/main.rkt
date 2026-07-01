@@ -96,8 +96,7 @@
 
 (define _rival-error (_enum '(ok = 0 invalid_input = -1 unsamplable = -2) _int32))
 (define _analyze-result (_list-struct _rival-error _stdbool _stdbool _stdbool _pointer))
-(define _optimal-precision-result
-  (_list-struct _rival-error _stdbool _pointer _size _double _pointer _size _double))
+(define _optimal-precision-result (_list-struct _rival-error _pointer _size))
 (define _profile-summary (_list-struct _pointer _size _uint32 _uint32))
 (define _execution-record (_list-struct _int32 _uint32 _double _uint32))
 (define execution-record-size (ctype-sizeof _execution-record))
@@ -538,32 +537,24 @@
   (define n-args (vector-length pt))
   (unless (= n-args (machine-wrapper-n-vars machine))
     (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt)))
-
+  
   (define arg-ptrs (machine-wrapper-arg-buf machine))
   (when (> n-args 0)
     (for ([i (in-range n-args)]
           [arg (in-vector pt)])
       (ptr-set! arg-ptrs _mpfr-pointer i (input->bf arg))))
-
-  (match-define (list status found? optimal-ptr optimal-len optimal-time tuned-ptr tuned-len tuned-time)
+  
+  (match-define (list status optimal-ptr optimal-len)
     (rival_machine_find_optimal_precisions
      (machine-wrapper-ptr machine)
      (and (> n-args 0) arg-ptrs)))
   (match status
     ['ok
-     (and found?
-          (list (if (or (not optimal-ptr) (zero? optimal-len))
-                    (vector)
-                    (for/vector #:length optimal-len
-                                ([i (in-range optimal-len)])
-                      (ptr-ref optimal-ptr _uint32 i)))
-                optimal-time
-                (if (or (not tuned-ptr) (zero? tuned-len))
-                    (vector)
-                    (for/vector #:length tuned-len
-                                ([i (in-range tuned-len)])
-                      (ptr-ref tuned-ptr _uint32 i)))
-                tuned-time))]
+     (if (or (not optimal-ptr) (zero? optimal-len))
+         (vector)
+         (for/vector #:length optimal-len
+                     ([i (in-range optimal-len)])
+           (ptr-ref optimal-ptr _uint32 i)))]
     ['invalid_input (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt))]
     ['unsamplable (raise (exn:rival:unsamplable "Unsamplable input" (current-continuation-marks) pt))]
     [else (error 'rival-machine-find-optimal-precisions "Unknown result code: ~a" status)]))

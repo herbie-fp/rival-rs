@@ -76,30 +76,7 @@
         (if (zero? (vector-length baseline-executions))
             0
             (apply max (vector->list (vector-map execution-precision baseline-executions)))))
-
-      ; Store histograms data
-      (when (> baseline-iteration 0)
-        (for ([execution (in-vector baseline-executions)])
-          (define name (execution-name execution))
-          (define precision (execution-precision execution))
-          (when (equal? baseline-status 'valid)
-            (timeline-push! timeline
-                            'mixsample-baseline-valid
-                            (list (execution-time execution) name precision)))
-          (timeline-push! timeline
-                          'mixsample-baseline-all
-                          (list (execution-time execution) name precision))))
-
-      ; Record the percentage of instructions has been executed
-      (when (equal? baseline-status 'valid)
-        (for ([execution (in-vector baseline-executions)])
-          (timeline-push! timeline
-                          'instr-executed-cnt
-                          (list 'baseline (execution-iteration execution) 1)))
-        (define ivec-len (rival-profile baseline-machine 'instructions))
-        (for ([n (in-range (add1 baseline-iteration))])
-          (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n ivec-len))))
-
+      
       ; --------------------------- Rival execution -------------------------------------------------
       (define rival-start-apply (current-inexact-milliseconds))
       (match-define (list rival-status rival-exs)
@@ -111,55 +88,9 @@
       (define rival-apply-time (- (current-inexact-milliseconds) rival-start-apply))
       (define rival-iter (rival-profile rival-machine 'iterations))
       (define rival-executions (rival-profile rival-machine 'executions))
-
-      (when (and (> baseline-iteration 0) (not tuned-bench))
-        (set! tuned-bench #t)
-        (*num-tuned-benchmarks* (add1 (*num-tuned-benchmarks*))))
-
-      ; Store histograms data
-      (when (> baseline-iteration 0)
-        (for ([execution (in-vector rival-executions)])
-          (define name (execution-name execution))
-          (define precision (execution-precision execution))
-          (when (equal? rival-status 'valid)
-            (timeline-push! timeline
-                            'mixsample-rival-valid
-                            (list (execution-time execution) name precision)))
-          (timeline-push! timeline
-                          'mixsample-rival-all
-                          (list (execution-time execution) name precision))))
-
-      ; Store density plot data
-      (when (and (equal? rival-status 'valid) (> baseline-iteration 0))
-        (define h (make-hash))
-        (define max-prec 0)
-        (for ([exec (in-vector rival-executions)])
-          (define name (execution-name exec))
-          (define number (execution-number exec))
-          (define precision (execution-precision exec))
-          (unless (equal? (~a name) "adjust")
-            (define precision* (hash-ref h (list name number) (λ () 0)))
-            (hash-set! h (list name number) (max precision precision*))
-            (set! max-prec (max precision precision* max-prec))))
-        (for ([(_ precision) (in-hash h)])
-          (timeline-push! timeline 'density (~a (exact->inexact (/ precision max-prec)) #:width 5))))
-
-      ; Record the percentage of instructions has been executed
-      (when (equal? rival-status 'valid)
-        (for ([execution (in-vector rival-executions)])
-          (timeline-push! timeline
-                          'instr-executed-cnt
-                          (list 'rival (execution-iteration execution) 1)))
-        (define ivec-len (rival-profile rival-machine 'instructions))
-        (for ([n (in-range (add1 rival-iter))])
-          (timeline-push! timeline 'instr-executed-cnt (list 'rival-no-repeats n ivec-len))))
-
+      
       ; --------------------------- Sollya execution ------------------------------------------------
-      ; Points for expressions where Sollya has not compiled do not go to the plot/speed graphs!
-      ; Also, if Rival's status is invalid - these points do not go to the graphs!
-      ; We treat Rival's results as the right ones since for some benchs Sollya has produced wrong results!
-      (when (and (and rival-machine baseline-machine sollya-machine)
-                 (or (equal? rival-status 'valid) (equal? rival-status 'unsamplable)))
+      (when (and sollya-machine (not (equal? rival-status 'invalid)))
         (match sollya-reeval
           [#t
            (set! sollya-apply-time 0.0)
@@ -195,9 +126,92 @@
                    ["#f" 0.0]
                    [#f 0.0]
                    [_ sollya-apply-time]))])
-
+        
         ; -------------------------------- Combining results ----------------------------------------
-        ; When all the machines have compiled and produced results - write the results to outcomes
+        (when (and (> baseline-iteration 0) (not tuned-bench))
+          (set! tuned-bench #t)
+          (*num-tuned-benchmarks* (add1 (*num-tuned-benchmarks*))))
+        
+        ; Store histograms data
+        (when (> baseline-iteration 0)
+          ;; Rival
+          (for ([execution (in-vector rival-executions)])
+            (define name (execution-name execution))
+            (define precision (execution-precision execution))
+            (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
+              (timeline-push! timeline
+                              'mixsample-rival-valid
+                              (list (execution-time execution) name precision)))
+            (timeline-push! timeline
+                            'mixsample-rival-all
+                            (list (execution-time execution) name precision)))
+          
+          ;; Baseline
+          (for ([execution (in-vector baseline-executions)])
+            (define name (execution-name execution))
+            (define precision (execution-precision execution))
+            (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
+              (timeline-push! timeline
+                              'mixsample-baseline-valid
+                              (list (execution-time execution) name precision)))
+            (timeline-push! timeline
+                            'mixsample-baseline-all
+                            (list (execution-time execution) name precision))))
+        
+        ; Density plot data
+        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (> baseline-iteration 0))
+          (define h (make-hash))
+          (define max-prec 0)
+          (for ([exec (in-vector rival-executions)])
+            (define name (execution-name exec))
+            (define number (execution-number exec))
+            (define precision (execution-precision exec))
+            (unless (equal? (~a name) "adjust")
+              (define precision* (hash-ref h (list name number) (λ () 0)))
+              (hash-set! h (list name number) (max precision precision*))
+              (set! max-prec (max precision precision* max-prec))))
+          (for ([(_ precision) (in-hash h)])
+            (timeline-push! timeline 'density (~a (exact->inexact (/ precision max-prec)) #:width 5))))
+
+        ; Close-to-optimal graph
+        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (> baseline-iteration 0))
+          (define (last-precision-vector machine executions iteration)
+            (define v (make-vector (rival-profile machine 'instructions) 0))
+            (for ([exec (in-vector executions)]
+                  #:when (and (= (execution-iteration exec) iteration)
+                              (>= (execution-number exec) 0)))
+              (define i (execution-number exec))
+              (vector-set! v i (max (vector-ref v i)
+                                    (execution-precision exec))))
+            v)
+          
+          (define rival-last-precisions (last-precision-vector rival-machine rival-executions rival-iter))
+          (define baseline-last-precisions (last-precision-vector baseline-machine baseline-executions baseline-iteration))
+          (define optimal-precisions (rival-machine-find-optimal-precisions rival-machine (list->vector (map bf pt))))
+          (define iter baseline-iteration)
+          (void))
+        
+        ; Percentage of instructions has been executed graph
+        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
+          ;; Rival
+          (for ([execution (in-vector rival-executions)])
+            (timeline-push! timeline
+                            'instr-executed-cnt
+                            (list 'rival (execution-iteration execution) 1)))
+          (define ivec-len (rival-profile rival-machine 'instructions))
+          (for ([n (in-range (add1 rival-iter))])
+            (timeline-push! timeline 'instr-executed-cnt (list 'rival-no-repeats n ivec-len)))
+          
+          ;; Baseline
+          (for ([execution (in-vector baseline-executions)])
+            (timeline-push! timeline
+                            'instr-executed-cnt
+                            (list 'baseline (execution-iteration execution) 1)))
+          (define ivec-len (rival-profile baseline-machine 'instructions))
+          (for ([n (in-range (add1 baseline-iteration))])
+            (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n ivec-len))))
+
+        ; Speed graph and number of points graph
         (when (> (*sampling-timeout*) sollya-apply-time)
           (point-bucketing timeline
                            rival-status
@@ -212,21 +226,19 @@
                            baseline-precision
                            rival-iter))
 
+        ; Timeouts measuring
         (when (<= (*sampling-timeout*) sollya-apply-time)
           (*sollya-timeout* (add1 (*sollya-timeout*))))
         (when (<= (*sampling-timeout*) rival-apply-time)
           (*rival-timeout* (add1 (*rival-timeout*))))
         (when (<= (*sampling-timeout*) baseline-apply-time)
           (*baseline-timeout* (add1 (*baseline-timeout*)))))
-
-      ; Count differences where baseline is better than rival
+      
+      ; Count differences
       (define rival-baseline-difference
-        (if (and (or (equal? rival-status 'unsamplable) (equal? rival-status 'invalid))
-                 (equal? baseline-status 'valid))
-            1
-            0))
+        (if (not (equal? rival-status baseline-status)) 1 0))
       (cons rival-status (cons rival-apply-time rival-baseline-difference))))
-
+  
   ; Zombie process
   (when sollya-machine
     (sollya-kill sollya-machine))

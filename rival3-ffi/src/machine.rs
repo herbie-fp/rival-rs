@@ -18,7 +18,6 @@ pub struct RivalMachine {
     pub(crate) profile_cache: ProfileCache,
     pub(crate) instruction_names_cache: Vec<u8>,
     pub(crate) optimal_precisions_cache: Vec<u32>,
-    pub(crate) tuned_precisions_cache: Vec<u32>,
     pub(crate) n_vars: usize,
     pub(crate) n_exprs: usize,
 }
@@ -42,28 +41,8 @@ pub struct RivalAnalyzeResult {
 #[repr(C)]
 pub struct RivalOptimalPrecisionResult {
     pub error: RivalError,
-    pub found: bool,
     pub optimal_precisions: *const u32,
     pub optimal_len: usize,
-    pub optimal_time_ms: f64,
-    pub tuned_precisions: *const u32,
-    pub tuned_len: usize,
-    pub tuned_time_ms: f64,
-}
-
-impl Default for RivalOptimalPrecisionResult {
-    fn default() -> Self {
-        Self {
-            error: RivalError::Ok,
-            found: false,
-            optimal_precisions: ptr::null(),
-            optimal_len: 0,
-            optimal_time_ms: 0.0,
-            tuned_precisions: ptr::null(),
-            tuned_len: 0,
-            tuned_time_ms: 0.0,
-        }
-    }
 }
 
 #[inline]
@@ -358,7 +337,6 @@ pub unsafe extern "C" fn rival_machine_new(
             profile_cache: ProfileCache::new(),
             instruction_names_cache: Vec::new(),
             optimal_precisions_cache: Vec::new(),
-            tuned_precisions_cache: Vec::new(),
             n_vars,
             n_exprs,
         }))
@@ -464,60 +442,44 @@ pub unsafe extern "C" fn rival_machine_find_optimal_precisions(
 ) -> RivalOptimalPrecisionResult {
     let wrapper = unsafe { &mut *machine };
     wrapper.optimal_precisions_cache.clear();
-    wrapper.tuned_precisions_cache.clear();
 
     let n_args = wrapper.n_vars;
     if args.is_null() && n_args > 0 {
         return RivalOptimalPrecisionResult {
-            error: RivalError::InvalidInput,
-            ..Default::default()
+            error: RivalError::Unsamplable,
+            optimal_precisions: ptr::null(),
+            optimal_len: 0,
         };
     }
 
     if n_args > 0 {
-        if let Err(e) = unsafe { marshal_point_args(args, n_args, &mut wrapper.arg_buf) } {
+        if unsafe { marshal_point_args(args, n_args, &mut wrapper.arg_buf) }.is_err() {
             return RivalOptimalPrecisionResult {
-                error: e,
-                ..Default::default()
+                error: RivalError::Unsamplable,
+                optimal_precisions: ptr::null(),
+                optimal_len: 0,
             };
         }
     }
 
     match wrapper.machine.find_optimal_precisions(&wrapper.arg_buf) {
         Ok(Some(result)) => {
-            wrapper.optimal_precisions_cache = result.optimal_precisions;
-            wrapper.tuned_precisions_cache = result.tuned_precisions;
+            wrapper.optimal_precisions_cache = result;
             let optimal_ptr = if wrapper.optimal_precisions_cache.is_empty() {
                 ptr::null()
             } else {
                 wrapper.optimal_precisions_cache.as_ptr()
             };
-            let tuned_ptr = if wrapper.tuned_precisions_cache.is_empty() {
-                ptr::null()
-            } else {
-                wrapper.tuned_precisions_cache.as_ptr()
-            };
             RivalOptimalPrecisionResult {
                 error: RivalError::Ok,
-                found: true,
                 optimal_precisions: optimal_ptr,
                 optimal_len: wrapper.optimal_precisions_cache.len(),
-                optimal_time_ms: result.optimal_time_ms,
-                tuned_precisions: tuned_ptr,
-                tuned_len: wrapper.tuned_precisions_cache.len(),
-                tuned_time_ms: result.tuned_time_ms,
             }
         }
-        Ok(None) => RivalOptimalPrecisionResult {
-            error: RivalError::Ok,
-            ..Default::default()
-        },
-        Err(error) => RivalOptimalPrecisionResult {
-            error: match error {
-                CoreError::InvalidInput => RivalError::InvalidInput,
-                CoreError::Unsamplable => RivalError::Unsamplable,
-            },
-            ..Default::default()
+        Ok(None) | Err(_) => RivalOptimalPrecisionResult {
+            error: RivalError::Unsamplable,
+            optimal_precisions: ptr::null(),
+            optimal_len: 0,
         },
     }
 }

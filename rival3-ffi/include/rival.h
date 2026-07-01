@@ -61,13 +61,8 @@ typedef struct RivalMachine RivalMachine;
 
 typedef struct RivalOptimalPrecisionResult {
     RivalError error;
-    bool found;
     const uint32_t *optimal_precisions;
     uintptr_t optimal_len;
-    double optimal_time_ms;
-    const uint32_t *tuned_precisions;
-    uintptr_t tuned_len;
-    double tuned_time_ms;
 } RivalOptimalPrecisionResult;
 
 typedef struct RivalAnalyzeResult {
