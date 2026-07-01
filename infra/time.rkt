@@ -175,21 +175,26 @@
 
         ; Close-to-optimal graph
         (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (> baseline-iteration 0))
-          (define (last-precision-vector machine executions iteration)
-            (define v (make-vector (rival-profile machine 'instructions) 0))
-            (for ([exec (in-vector executions)]
-                  #:when (and (= (execution-iteration exec) iteration)
-                              (>= (execution-number exec) 0)))
-              (define i (execution-number exec))
-              (vector-set! v i (max (vector-ref v i)
-                                    (execution-precision exec))))
-            v)
-          
-          (define rival-last-precisions (last-precision-vector rival-machine rival-executions rival-iter))
-          (define baseline-last-precisions (last-precision-vector baseline-machine baseline-executions baseline-iteration))
           (define optimal-precisions (rival-machine-find-optimal-precisions rival-machine (list->vector (map bf pt))))
-          (define iter baseline-iteration)
-          (void))
+          (define optimal-len (vector-length optimal-precisions))
+          (define (push-optimality! tool executions)
+            ; Max recorded precisions per operation
+            (define max-precisions (make-hash))
+            (for ([exec (in-vector executions)]
+                  #:when (and (>= (execution-number exec) 0)
+                              (< (execution-number exec) optimal-len)))
+              (define i (execution-number exec))
+              (define precision (execution-precision exec))
+              (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
+            ; How close max recorded precisions were to the optimal
+            (for ([(i precision) (in-hash max-precisions)])
+              (define diff (- precision (vector-ref optimal-precisions i)))
+              (timeline-push! timeline 'optimality
+                              (list tool
+                                    baseline-iteration
+                                    (~a (exact->inexact diff) #:width 5)))))
+          (push-optimality! "rival" rival-executions)
+          (push-optimality! "baseline" baseline-executions))
         
         ; Percentage of instructions has been executed graph
         (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
@@ -198,18 +203,18 @@
             (timeline-push! timeline
                             'instr-executed-cnt
                             (list 'rival (execution-iteration execution) 1)))
-          (define ivec-len (rival-profile rival-machine 'instructions))
+          (define rival-ivec-len (rival-profile rival-machine 'instructions))
           (for ([n (in-range (add1 rival-iter))])
-            (timeline-push! timeline 'instr-executed-cnt (list 'rival-no-repeats n ivec-len)))
+            (timeline-push! timeline 'instr-executed-cnt (list 'rival-no-repeats n rival-ivec-len)))
           
           ;; Baseline
           (for ([execution (in-vector baseline-executions)])
             (timeline-push! timeline
                             'instr-executed-cnt
                             (list 'baseline (execution-iteration execution) 1)))
-          (define ivec-len (rival-profile baseline-machine 'instructions))
+          (define baseline-ivec-len (rival-profile baseline-machine 'instructions))
           (for ([n (in-range (add1 baseline-iteration))])
-            (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n ivec-len))))
+            (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n baseline-ivec-len))))
 
         ; Speed graph and number of points graph
         (when (> (*sampling-timeout*) sollya-apply-time)
@@ -285,6 +290,8 @@
      (define precision args*)
      (define cnt (hash-ref density-hash precision (λ () 0)))
      (hash-set! density-hash precision (+ cnt 1))]
+    ['optimality
+     (hash-set! timeline key (cons args* (hash-ref timeline key)))]
     [else (error "Unknown key for timeline!")]))
 
 (define (timeline->jsexpr timeline)
@@ -308,7 +315,9 @@
           (list (~a (car key)) (second key) value))
         'density
         (for/list ([(key value) (in-hash (hash-ref timeline 'density))])
-          (list key value))))
+          (list key value))
+        'optimality
+        (reverse (hash-ref timeline 'optimality))))
 
 (define (make-expression-table points test-id timeline-port sollya-reeval)
   (newline)
@@ -329,7 +338,8 @@
            (cons 'mixsample-rival-all (make-hash))
            (cons 'mixsample-baseline-all (make-hash))
            (cons 'instr-executed-cnt (make-hash))
-           (cons 'density (make-hash)))))
+           (cons 'density (make-hash))
+           (cons 'optimality '()))))
 
   (define table
     (for/list ([rec (in-port read-json points)]
@@ -480,6 +490,7 @@
     (html-add-plot html-port "cnt_per_iters_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "repeats_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "density_plot.png" #:width 400 #:height 300)
+    (html-add-plot html-port "optimality_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "histogram_valid.png" #:width 650 #:height 275)
     (html-add-plot html-port "histogram_all.png" #:width 650 #:height 200))
 
