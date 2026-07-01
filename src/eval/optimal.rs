@@ -32,17 +32,17 @@ impl<D: Discretization> Machine<D> {
     ) -> Result<Option<OptimalPrecisionResult>, RivalError> {
         let _ = self.apply(args, None)?;
 
-        // Additional tuning pass to get the most optimal precisions
-        self.iteration = 1;
-        if self.adjust(&self.default_hint.clone()) {
-            return Err(RivalError::Unsamplable);
+        let mut tuned_precisions = self.precisions.clone();
+        for idx in 0..tuned_precisions.len() {
+            if !self.initial_repeats[idx] {
+                tuned_precisions[idx] = tuned_precisions[idx].max(self.initial_precisions[idx]);
+            }
         }
 
-        let tuned_precisions = self.precisions.clone();
         if !self.test_precision_vector(args, &tuned_precisions)? {
             return Ok(None);
         }
-	
+
         let mut tuned_time_ms = f64::INFINITY;
         for _ in 0..5 {
             let start = Instant::now();
@@ -53,9 +53,9 @@ impl<D: Discretization> Machine<D> {
             }
             tuned_time_ms = tuned_time_ms.min(start.elapsed().as_secs_f64() * 100.0);
         }
-	
+
         let mut optimal_precisions = tuned_precisions.clone();
-	
+
         for idx in (0..self.instructions.len()).rev() {
             let mut test_vec = optimal_precisions.clone();
 
