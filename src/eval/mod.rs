@@ -1,6 +1,7 @@
 //! Interval expression evaluation pipeline.
 
 pub(crate) mod machine;
+pub(crate) mod optimal;
 pub(crate) mod profile;
 pub(crate) mod run;
 

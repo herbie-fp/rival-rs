@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include "mpfr.h"
 
-#define RIVAL_ABI_VERSION 2
+#define RIVAL_ABI_VERSION 3
 
 #define RIVAL_EXPR_INVALID UINT32_MAX
 
@@ -58,6 +58,17 @@ typedef struct RivalExprArena RivalExprArena;
 typedef struct RivalHints RivalHints;
 
 typedef struct RivalMachine RivalMachine;
+
+typedef struct RivalOptimalPrecisionResult {
+    RivalError error;
+    bool found;
+    const uint32_t *optimal_precisions;
+    uintptr_t optimal_len;
+    double optimal_time_ms;
+    const uint32_t *tuned_precisions;
+    uintptr_t tuned_len;
+    double tuned_time_ms;
+} RivalOptimalPrecisionResult;
 
 typedef struct RivalAnalyzeResult {
     RivalError error;
@@ -298,6 +309,9 @@ RivalError rival_apply_baseline(struct RivalMachine *machine,
                                 uintptr_t n_out,
                                 const struct RivalHints *hints,
                                 uint32_t max_precision);
+
+struct RivalOptimalPrecisionResult rival_machine_find_optimal_precisions(struct RivalMachine *machine,
+                                                                         const mpfr_t *const *args);
 
 struct RivalAnalyzeResult rival_analyze_with_hints(struct RivalMachine *machine,
                                                    const mpfr_t *const *rect,

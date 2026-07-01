@@ -239,7 +239,7 @@ impl<D: Discretization> Machine<D> {
     }
 
     /// Execute instructions once using the supplied precision and hint plan.
-    fn run_with_hint(&mut self, hints: &[Hint]) {
+    pub(crate) fn run_with_hint(&mut self, hints: &[Hint]) {
         // On the first iteration use the initial plan; subsequent iterations use tuned state.
         let (precisions, repeats) = if self.iteration == 0 {
             (&self.initial_precisions[..], &self.initial_repeats[..])
@@ -398,7 +398,7 @@ impl<D: Discretization> Machine<D> {
     }
 
     /// Compute (good, done, bad, stuck) flags and update output_distance.
-    fn return_flags(&mut self) -> (bool, bool, bool, bool) {
+    pub(crate) fn return_flags(&mut self) -> (bool, bool, bool, bool) {
         let mut good = true;
         let mut done = true;
         let mut bad = false;

@@ -9,7 +9,9 @@ pub mod profile;
 pub use discretization::{RivalDiscType, RivalDiscretization};
 pub use expr::{RIVAL_EXPR_INVALID, RivalExprArena};
 pub use hints::RivalHints;
-pub use machine::{RivalAnalyzeResult, RivalMachine, RivalProfilingMode};
+pub use machine::{
+    RivalAnalyzeResult, RivalMachine, RivalOptimalPrecisionResult, RivalProfilingMode,
+};
 pub use profile::{RivalAggregatedProfile, RivalExecution, RivalProfileSummary};
 
 #[repr(i32)]
@@ -20,7 +22,7 @@ pub enum RivalError {
     Unsamplable = -2,
 }
 
-pub const RIVAL_ABI_VERSION: u32 = 2;
+pub const RIVAL_ABI_VERSION: u32 = 3;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rival_version() -> u32 {

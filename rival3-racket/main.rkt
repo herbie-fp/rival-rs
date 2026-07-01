@@ -10,6 +10,8 @@
 
 (provide rival-compile
          rival-apply
+         rival-machine-find-optimal-precisions
+         rival-machine-optimal-precision
          baseline-compile
          baseline-apply
          rival-analyze-with-hints
@@ -94,6 +96,8 @@
 
 (define _rival-error (_enum '(ok = 0 invalid_input = -1 unsamplable = -2) _int32))
 (define _analyze-result (_list-struct _rival-error _stdbool _stdbool _stdbool _pointer))
+(define _optimal-precision-result
+  (_list-struct _rival-error _stdbool _pointer _size _double _pointer _size _double))
 (define _profile-summary (_list-struct _pointer _size _uint32 _uint32))
 (define _execution-record (_list-struct _int32 _uint32 _double _uint32))
 (define execution-record-size (ctype-sizeof _execution-record))
@@ -204,6 +208,9 @@
 (define-rival rival_apply_baseline
               (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
 
+(define-rival rival_machine_find_optimal_precisions
+              (_fun _pointer _pointer -> _optimal-precision-result))
+
 (define-rival rival_analyze_with_hints (_fun _pointer _pointer _size _pointer -> _analyze-result))
 (define-rival rival_analyze_baseline_with_hints
               (_fun _pointer _pointer _size _pointer -> _analyze-result))
@@ -220,8 +227,8 @@
               (_fun _pointer (out : (_ptr o _size)) -> (ptr : _pointer) -> (values ptr out)))
 
 (let ([v (rival_version)])
-  (unless (= v 2)
-    (error 'rival3 "ABI version mismatch: expected 2, got ~a" v)))
+  (unless (= v 3)
+    (error 'rival3 "ABI version mismatch: expected 3, got ~a" v)))
 
 (struct machine-wrapper (ptr n-vars n-exprs discs arg-buf arg-bfs out-buf out-bfs rect-buf name-table)
   #:property prop:cpointer
@@ -526,6 +533,42 @@
                (lambda (m a na o no h)
                  (rival_apply m a na o no h (*rival-max-precision*)))
                'rival-apply))
+
+(define (rival-machine-find-optimal-precisions machine pt)
+  (define n-args (vector-length pt))
+  (unless (= n-args (machine-wrapper-n-vars machine))
+    (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt)))
+
+  (define arg-ptrs (machine-wrapper-arg-buf machine))
+  (when (> n-args 0)
+    (for ([i (in-range n-args)]
+          [arg (in-vector pt)])
+      (ptr-set! arg-ptrs _mpfr-pointer i (input->bf arg))))
+
+  (match-define (list status found? optimal-ptr optimal-len optimal-time tuned-ptr tuned-len tuned-time)
+    (rival_machine_find_optimal_precisions
+     (machine-wrapper-ptr machine)
+     (and (> n-args 0) arg-ptrs)))
+  (match status
+    ['ok
+     (and found?
+          (list (if (or (not optimal-ptr) (zero? optimal-len))
+                    (vector)
+                    (for/vector #:length optimal-len
+                                ([i (in-range optimal-len)])
+                      (ptr-ref optimal-ptr _uint32 i)))
+                optimal-time
+                (if (or (not tuned-ptr) (zero? tuned-len))
+                    (vector)
+                    (for/vector #:length tuned-len
+                                ([i (in-range tuned-len)])
+                      (ptr-ref tuned-ptr _uint32 i)))
+                tuned-time))]
+    ['invalid_input (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt))]
+    ['unsamplable (raise (exn:rival:unsamplable "Unsamplable input" (current-continuation-marks) pt))]
+    [else (error 'rival-machine-find-optimal-precisions "Unknown result code: ~a" status)]))
+
+(define rival-machine-optimal-precision rival-machine-find-optimal-precisions)
 
 (define (baseline-apply machine pt [hints #f])
   (apply-inner machine
