@@ -16,18 +16,21 @@ impl<D: Discretization> Machine<D> {
         args: &[Ival],
     ) -> Result<Option<Vec<u32>>, RivalError> {
         self.apply(args, None)?;
-	
+
         let mut optimal_precisions = self.precisions.clone();
         for idx in 0..optimal_precisions.len() {
             if !self.initial_repeats[idx] {
                 optimal_precisions[idx] = optimal_precisions[idx].max(self.initial_precisions[idx]);
             }
         }
-	
+
         if !self.test_precision_vector(args, &optimal_precisions)? {
-            return Ok(None);
+            optimal_precisions.fill(self.max_precision);
+            if !self.test_precision_vector(args, &optimal_precisions)? {
+                return Ok(None);
+            }
         }
-	
+
         for idx in (0..self.instructions.len()).rev() {
             let mut test_vec = optimal_precisions.clone();
 
@@ -44,10 +47,10 @@ impl<D: Discretization> Machine<D> {
             }
             optimal_precisions[idx] = hi;
         }
-	
+
         Ok(Some(optimal_precisions))
     }
-    
+
     fn test_precision_vector(
         &mut self,
         args: &[Ival],
@@ -56,7 +59,7 @@ impl<D: Discretization> Machine<D> {
         if precision_vec.len() != self.instructions.len() {
             return Err(RivalError::InvalidInput);
         }
-	
+
         self.load_arguments(args);
         self.iteration = 1;
         self.precisions.copy_from_slice(precision_vec);
