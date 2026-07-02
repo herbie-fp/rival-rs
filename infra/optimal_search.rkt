@@ -32,7 +32,7 @@
         (rival-machine-find-optimal-precisions machine (list->vector (map bf pt)))))
     (vector->list optimal-precisions)))
 
-(define (process-record rec i)
+(define (process-record rec)
   (define pts (hash-ref rec 'points))
   (define machine (compile-record rec))
   (hash 'exprs (hash-ref rec 'exprs)
@@ -40,13 +40,11 @@
                   (find-optimal-precisions machine (point-record->point pt*)))))
 
 (define (run points-port output-port)
-  (define output
-    (for/list ([rec (in-port read-json points-port)]
-               [i (in-naturals)])
-      (fprintf (current-error-port) "~a: processing benchmark\n" i)
-      (process-record rec i)))
-  (write-json output output-port)
-  (newline output-port))
+  (for ([rec (in-port read-json points-port)]
+        [i (in-naturals)])
+    (fprintf (current-error-port) "~a: processing benchmark\n" i)
+    (write-json (process-record rec) output-port)
+    (newline output-port)))
 
 (module+ main
   (require racket/cmdline)

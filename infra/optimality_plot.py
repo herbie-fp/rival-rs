@@ -36,12 +36,11 @@ def plot_optimality(outcomes, args):
         plot_empty(args)
         return
 
-    averages = outcomes.groupby(["tool", "iteration"], as_index=False, sort=True)["diff"].mean()
-    iterations = sorted(averages["iteration"].unique())
+    iterations = sorted(outcomes["iteration"].unique())
     x = np.arange(len(iterations))
 
     def tool_values(tool):
-        by_iter = averages.loc[averages["tool"] == tool].set_index("iteration")["diff"]
+        by_iter = outcomes.loc[outcomes["tool"] == tool].set_index("iteration")["diff"]
         return np.array([by_iter.get(iteration, np.nan) for iteration in iterations], dtype=float)
 
     fig, ax = plt.subplots(figsize=(4, 3))

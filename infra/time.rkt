@@ -295,6 +295,19 @@
     [else (error "Unknown key for timeline!")]))
 
 (define (timeline->jsexpr timeline)
+  (define (optimality->jsexpr rows)
+    (define optimality-hash (make-hash))
+    (for ([row (in-list rows)])
+      (match-define (list tool iter diff) row)
+      (define diff* (string->number diff))
+      (match-define (list total cnt)
+        (hash-ref optimality-hash (list tool iter) (λ () (list 0.0 0))))
+      (hash-set! optimality-hash (list tool iter) (list (+ total diff*) (add1 cnt))))
+    (for/list ([(key value) (in-hash optimality-hash)])
+       (match-define (list tool iter) key)
+       (match-define (list total cnt) value)
+       (list tool iter  (~a (exact->inexact (/ total cnt)) #:width 5))))
+  
   (hash 'outcomes
         (for/list ([(key value) (in-hash (hash-ref timeline 'outcomes))])
           (list (first value) (second key) (third key) (first key) (second value)))
@@ -317,7 +330,7 @@
         (for/list ([(key value) (in-hash (hash-ref timeline 'density))])
           (list key value))
         'optimality
-        (reverse (hash-ref timeline 'optimality))))
+        (optimality->jsexpr (hash-ref timeline 'optimality))))
 
 (define (make-expression-table points test-id timeline-port sollya-reeval)
   (newline)
