@@ -9,3 +9,4 @@ rival/
 rival3-racket/doc/
 rival3-racket/private/native/
 infra/points.json
+infra/optimal_precisions.json

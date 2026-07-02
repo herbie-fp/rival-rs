@@ -49,7 +49,7 @@
 (module+ main
   (require racket/cmdline)
 
-  (define output-file "infra/optimal_points.json")
+  (define output-file "infra/optimal_precisions.json")
 
   (command-line
    #:once-each
