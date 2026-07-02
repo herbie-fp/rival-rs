@@ -9,13 +9,14 @@ use crate::{
 impl<D: Discretization> Machine<D> {
     /// Find a lower per-instruction precision assignment that still succeeds at `args`.
     ///
-    /// Returns `Ok(None)` when the tuned precision assignment produced by normal
-    /// evaluation does not succeed when replayed directly.
+    /// Returns `Ok(None)` when neither the precision assignment left by normal
+    /// evaluation nor an all-max-precision assignment succeeds when replayed
+    /// directly.
     pub fn find_optimal_precisions(
         &mut self,
         args: &[Ival],
     ) -> Result<Option<Vec<u32>>, RivalError> {
-        self.apply(args, None)?;
+        let _ = self.apply(args, None);
 
         let mut optimal_precisions = self.precisions.clone();
         for idx in 0..optimal_precisions.len() {
