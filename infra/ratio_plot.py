@@ -10,7 +10,7 @@ def plot_speed_graph_rival_iter(outcomes, args):
     fig, ax = plt.subplots(figsize=(4, 2.5))
     
     # Drop precision column and sum up based on iteration
-    outcomes = outcomes.drop(['baseline_precision'], axis=1)
+    outcomes = outcomes.drop(['baseline_iter'], axis=1)
     outcomes = outcomes.groupby(['rival_iter', 'tool_name'], as_index=False).sum()
 
     # Select appropriate tools
@@ -59,24 +59,22 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     
     # Drop precision column and sum up based on iteration
     outcomes = outcomes.drop(['rival_iter'], axis=1)
-    outcomes = outcomes.groupby(['baseline_precision', 'tool_name'], as_index=False).sum()
+    outcomes = outcomes.groupby(['baseline_iter', 'tool_name'], as_index=False).sum()
     
     # Select appropriate tools
-    baseline_cmp = outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_precision'] > 73)]
-    rival_cmp = outcomes.loc[(outcomes['tool_name'] == "valid-rival") & (outcomes['baseline_precision'] > 73)]
-    sollya_cmp = outcomes.loc[(outcomes['tool_name'] == "valid-sollya") & (outcomes['baseline_precision'] > 73)]
+    baseline_cmp = outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_iter'] > 1)]
+    rival_cmp = outcomes.loc[(outcomes['tool_name'] == "valid-rival") & (outcomes['baseline_iter'] > 1)]
+    sollya_cmp = outcomes.loc[(outcomes['tool_name'] == "valid-sollya") & (outcomes['baseline_iter'] > 1)]
 
-    rival_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-rival") & (outcomes['baseline_precision'] == 63)]['time'].iloc[0])
-    baseline_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_precision'] == 63)]['time'].iloc[0])
-    sollya_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-sollya") & (outcomes['baseline_precision'] == 63)]['time'].iloc[0])
+    rival_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-rival") & (outcomes['baseline_iter'] == 0)]['time'].iloc[0])
+    baseline_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_iter'] == 0)]['time'].iloc[0])
+    sollya_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-sollya") & (outcomes['baseline_iter'] == 0)]['time'].iloc[0])
     
     if sollya_norm:
-        print("\\newcommand{\\NumTunedPoints}{" + str(rival_cmp['number_of_points'].sum()) + "\\xspace}")
-        print("\\newcommand{\\NumUntunedPoints}{" + str(4070208-rival_cmp['number_of_points'].sum()) + "\\xspace}")
-
-    rival_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-rival") & (outcomes['baseline_precision'] == 63)]['time'].iloc[0])
-    baseline_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_precision'] == 63)]['time'].iloc[0])
-    sollya_initial = float(outcomes.loc[(outcomes['tool_name'] == "valid-sollya") & (outcomes['baseline_precision'] == 63)]['time'].iloc[0])
+        rival_points = outcomes.loc[outcomes['tool_name'] == "valid-rival", 'number_of_points'].sum()
+        rival_tuned_points = rival_cmp['number_of_points'].sum()
+        print("\\newcommand{\\NumTunedPoints}{" + str(rival_tuned_points) + "\\xspace}")
+        print("\\newcommand{\\NumUntunedPoints}{" + str(rival_points-rival_tuned_points) + "\\xspace}")
     
     if sollya_norm:
         print("\\newcommand{\\RivalInitialSpeedupOverSollya}{" + str(round(sollya_initial/rival_initial, 2)) + "\\xspace}")
@@ -84,9 +82,9 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     
     # Some weird functions that creates speed per millisecond for each tool
     def add_values(row):
-        return int(row['baseline_precision']), (row['number_of_points'] / row['time']) * 1000
+        return int(row['baseline_iter']), (row['number_of_points'] / row['time']) * 1000
     def tool_cmp2speed(x):
-        return x.sort_values(by=['baseline_precision']).apply(add_values, axis=1, result_type='expand')
+        return x.sort_values(by=['baseline_iter']).apply(add_values, axis=1, result_type='expand')
 
     # Sollya timings considered are as base since we are doing speed ratio comparison
     base = np.array(tool_cmp2speed(sollya_cmp if sollya_norm else baseline_cmp)[1])
@@ -138,7 +136,7 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     
 def load_outcomes(path):
     outcomes = json.load(open(path, "r"))["outcomes"]
-    outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_precision', 'tool_name', 'number_of_points'])
+    outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_iter', 'tool_name', 'number_of_points'])
     return outcomes
 
 parser = argparse.ArgumentParser(prog='ratio_plot.py', description='Script outputs ratio plots')
@@ -150,4 +148,3 @@ outcomes = load_outcomes(args.timeline)
 plot_speed_graph_rival_iter(outcomes, args)
 plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=True)
 plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False)
-

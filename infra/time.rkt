@@ -236,7 +236,7 @@
                            sollya-status
                            sollya-apply-time
                            sollya-exs
-                           baseline-precision
+                           baseline-iteration
                            rival-iter))
 
         ; Timeouts measuring
@@ -275,11 +275,11 @@
 (define (timeline-push! timeline key args*)
   (match key
     ['outcomes
-     (match-define (list status iter precision time*) args*)
+     (match-define (list status rival-iter baseline-iter time*) args*)
      (define outcomes-hash (hash-ref timeline key))
      (match-define (list time num-points)
-       (hash-ref outcomes-hash (list status iter precision) (λ () (list 0 0))))
-     (hash-set! outcomes-hash (list status iter precision) (list (+ time time*) (+ num-points 1)))]
+       (hash-ref outcomes-hash (list status rival-iter baseline-iter) (λ () (list 0 0))))
+     (hash-set! outcomes-hash (list status rival-iter baseline-iter) (list (+ time time*) (+ num-points 1)))]
     [(or 'mixsample-rival-valid
          'mixsample-rival-all
          'mixsample-baseline-valid
@@ -572,7 +572,7 @@
                          sollya-status
                          sollya-time
                          sollya-exs
-                         baseline-precision
+                         baseline-iter
                          rival-iter)
 
   (define (status-subbucketing status exs)
@@ -595,13 +595,13 @@
              (> (*sampling-timeout*) baseline-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "valid-sollya" rival-iter baseline-precision sollya-time))
+                        (list "valid-sollya" rival-iter baseline-iter sollya-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "valid-baseline" rival-iter baseline-precision baseline-time))
+                        (list "valid-baseline" rival-iter baseline-iter baseline-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "valid-rival" rival-iter baseline-precision rival-time))
+                        (list "valid-rival" rival-iter baseline-iter rival-time))
         (if (or (fl= rival-exs sollya-exs)
                 (and (fl= rival-exs (fl 0.0)) (fl= sollya-exs (fl -0.0)))
                 (and (fl= rival-exs (fl -0.0)) (fl= sollya-exs (fl 0.0))))
@@ -614,7 +614,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-rival+baseline" rival-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               rival-time))]
 
        ; Baseline and Sollya have succeeded
@@ -623,7 +623,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-sollya+baseline" baseline-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               sollya-time))]
 
        ; Sollya and Rival have succeeded
@@ -632,7 +632,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-rival+sollya" rival-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               rival-time))]
 
        ; Only Rival has succeeded
@@ -641,7 +641,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-rival-only" rival-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               rival-time))]
 
        ; Only Sollya has succeeded
@@ -650,7 +650,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-sollya-only" sollya-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               sollya-time))]
 
        ; Only Baseline has succeeded
@@ -659,20 +659,20 @@
                         'outcomes
                         (list (status-subbucketing "valid-baseline-only" baseline-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               baseline-time))]
 
        ; timeout at all the tools
        [else
         (timeline-push! timeline
                         'outcomes
-                        (list "exit-baseline" rival-iter baseline-precision baseline-time))
+                        (list "exit-baseline" rival-iter baseline-iter baseline-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "exit-sollya" rival-iter baseline-precision sollya-time))
+                        (list "exit-sollya" rival-iter baseline-iter sollya-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "exit-rival" rival-iter baseline-precision rival-time))])]
+                        (list "exit-rival" rival-iter baseline-iter rival-time))])]
 
     ; Rival has exited
     [(equal? rival-status 'unsamplable)
@@ -683,7 +683,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-sollya+baseline" baseline-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               sollya-time))]
 
        ; Only Sollya has succeeded
@@ -692,7 +692,7 @@
                         'outcomes
                         (list (status-subbucketing "valid-sollya-only" sollya-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               sollya-time))]
 
        ; Only Baseline has succeeded
@@ -701,17 +701,17 @@
                         'outcomes
                         (list (status-subbucketing "valid-baseline-only" baseline-exs)
                               rival-iter
-                              baseline-precision
+                              baseline-iter
                               baseline-time))]
 
        ; Points that every tools fail to evaluate when the precision is unreacheble
        [else
         (timeline-push! timeline
                         'outcomes
-                        (list "exit-baseline" rival-iter baseline-precision baseline-time))
+                        (list "exit-baseline" rival-iter baseline-iter baseline-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "exit-sollya" rival-iter baseline-precision sollya-time))
+                        (list "exit-sollya" rival-iter baseline-iter sollya-time))
         (timeline-push! timeline
                         'outcomes
-                        (list "exit-rival" rival-iter baseline-precision rival-time))])]))
+                        (list "exit-rival" rival-iter baseline-iter rival-time))])]))

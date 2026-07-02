@@ -11,17 +11,13 @@ def plot_cnt_per_iters(outcomes, args):
     fig, ax = plt.subplots(figsize=(4, 3))
     fig.tight_layout(pad=2.0)
     
-    # Drop precision column and sum up based on iteration
-    # outcomes = outcomes.drop(['baseline_precision'], axis=1)
-    # outcomes = outcomes.groupby(['rival_iter', 'tool_name'], as_index=False).sum()
-    
     # Select tools
-    baseline = outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_precision'] > 63)]
+    baseline = outcomes.loc[(outcomes['tool_name'] == "valid-baseline") & (outcomes['baseline_iter'] > 0)]
     baseline = baseline.drop(['rival_iter'], axis=1)
-    baseline = baseline.groupby(['baseline_precision'], as_index=False, sort=True).sum()
+    baseline = baseline.groupby(['baseline_iter'], as_index=False, sort=True).sum()
     
     rival = outcomes.loc[(outcomes['tool_name'] == "valid-rival") & (outcomes['rival_iter'] > 0)]
-    rival = rival.drop(['baseline_precision'], axis=1)
+    rival = rival.drop(['baseline_iter'], axis=1)
     rival = rival.groupby(['rival_iter'], as_index=False, sort=True).sum()
     
     ax.bar(np.arange(len(baseline)) + 0.925, baseline['number_of_points'], color="green", alpha=1, width=0.5, label='baseline', hatch='/')
@@ -52,7 +48,7 @@ def plot_cnt_per_iters(outcomes, args):
 
 def load_outcomes(path):
     outcomes = json.load(open(path, "r"))["outcomes"]
-    outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_precision', 'tool_name', 'number_of_points'])
+    outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_iter', 'tool_name', 'number_of_points'])
     return outcomes
 
 parser = argparse.ArgumentParser(prog='ratio_plot.py', description='Script outputs ratio plots')
