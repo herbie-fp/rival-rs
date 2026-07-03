@@ -198,8 +198,7 @@
             (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
           (define optimal-precisions (list->vector optimal-precision-list))
           (define optimal-len (vector-length optimal-precisions))
-          (define (push-optimality! tool executions)
-            ; Max recorded precisions per operation
+          (define (executions->max-precisions executions)
             (define max-precisions (make-hash))
             (for ([exec (in-vector executions)]
                   #:when (and (>= (execution-number exec) 0)
@@ -207,14 +206,18 @@
               (define i (execution-number exec))
               (define precision (execution-precision exec))
               (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
-            ; How close max recorded precisions were to the optimal
-            (for ([(i precision) (in-hash max-precisions)])
-              (define optimal-precision (vector-ref optimal-precisions i))
-              (define diff (- precision optimal-precision))
-              (define relative-diff (/ diff (max 1 optimal-precision)))
-              (timeline-push! timeline 'optimality (list tool baseline-iteration diff relative-diff))))
-          (push-optimality! "rival" rival-executions)
-          (push-optimality! "baseline" baseline-executions))
+            max-precisions)
+          (define rival-max-precisions (executions->max-precisions rival-executions))
+          (define baseline-max-precisions (executions->max-precisions baseline-executions))
+          (for ([(i rival-precision) (in-hash rival-max-precisions)])
+            (define optimal-precision (vector-ref optimal-precisions i))
+            (define baseline-precision (hash-ref baseline-max-precisions i))
+            (timeline-push! timeline
+                            'optimality
+                            (list baseline-iteration
+                                  optimal-precision
+                                  rival-precision
+                                  baseline-precision))))
         
         ; Percentage of instructions has been executed graph
         (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
@@ -316,25 +319,26 @@
      (hash-set! density-hash precision (add1 cnt))]
     ['optimality
      (define optimality-hash (hash-ref timeline key))
-     (match-define (list tool iter diff relative-diff) args*)
-     (match-define (list total cnt relative-total)
-       (hash-ref optimality-hash (list tool iter) (λ () (list 0.0 0 0.0))))
+     (match-define (list iter optimal-precision rival-precision baseline-precision) args*)
+     (match-define (list optimal-total rival-total baseline-total cnt)
+       (hash-ref optimality-hash iter (λ () (list 0.0 0.0 0.0 0))))
      (hash-set! optimality-hash
-                (list tool iter)
-                (list (+ total diff)
-                      (add1 cnt)
-                      (+ relative-total relative-diff)))]
+                iter
+                (list (+ optimal-total optimal-precision)
+                      (+ rival-total rival-precision)
+                      (+ baseline-total baseline-precision)
+                      (add1 cnt)))]
     [else (error "Unknown key for timeline!")]))
 
 (define (timeline->jsexpr timeline)
   (define (optimality->jsexpr optimality-hash)
     (for/list ([(key value) (in-hash optimality-hash)])
-       (match-define (list tool iter) key)
-       (match-define (list total cnt relative-total) value)
-       (list tool
-             iter
-             (~a (exact->inexact (/ total cnt)) #:width 5)
-             (~a (exact->inexact (/ relative-total cnt)) #:width 5))))
+       (define iter key)
+       (match-define (list optimal-total rival-total baseline-total cnt) value)
+       (list iter
+             (~a (exact->inexact (/ optimal-total cnt)) #:width 5)
+             (~a (exact->inexact (/ rival-total cnt)) #:width 5)
+             (~a (exact->inexact (/ baseline-total cnt)) #:width 5))))
   
   (hash 'outcomes
         (for/list ([(key value) (in-hash (hash-ref timeline 'outcomes))])
@@ -539,7 +543,6 @@
     (html-add-plot html-port "repeats_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "density_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "optimality_plot.png" #:width 400 #:height 300)
-    (html-add-plot html-port "optimality_relative_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "histogram_valid.png" #:width 650 #:height 275)
     (html-add-plot html-port "histogram_all.png" #:width 650 #:height 200))
 
