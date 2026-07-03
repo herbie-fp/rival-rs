@@ -148,6 +148,20 @@
         (when (and (> baseline-iteration 0) (not tuned-bench))
           (set! tuned-bench #t)
           (*num-tuned-benchmarks* (add1 (*num-tuned-benchmarks*))))
+
+        (define (executions->max-precisions executions)
+          (define max-precisions (make-hash))
+          (for ([exec (in-vector executions)]
+                #:when (>= (execution-number exec) 0))
+            (define i (execution-number exec))
+            (define precision (execution-precision exec))
+            (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
+          max-precisions)
+
+        (define (push-normalized-density! tool precisions)
+          (define max-prec (apply max precisions))
+          (for ([precision (in-list precisions)])
+            (timeline-push! timeline'density (list tool (~a (exact->inexact (/ precision max-prec)) #:width 5)))))
         
         ; Store histograms data
         (when (> baseline-iteration 0)
@@ -177,18 +191,13 @@
         
         ; Density plot data
         (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (> baseline-iteration 0))
-          (define h (make-hash))
-          (define max-prec 0)
-          (for ([exec (in-vector rival-executions)])
-            (define name (execution-name exec))
-            (define number (execution-number exec))
-            (define precision (execution-precision exec))
-            (unless (equal? (~a name) "adjust")
-              (define precision* (hash-ref h (list name number) (λ () 0)))
-              (hash-set! h (list name number) (max precision precision*))
-              (set! max-prec (max precision precision* max-prec))))
-          (for ([(_ precision) (in-hash h)])
-            (timeline-push! timeline 'density (~a (exact->inexact (/ precision max-prec)) #:width 5))))
+          (unless optimal-precision-list
+            (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
+          (define rival-max-precisions (executions->max-precisions rival-executions))
+          (define baseline-max-precisions (executions->max-precisions baseline-executions))
+          (push-normalized-density! 'rival (for/list ([(_ precision) (in-hash rival-max-precisions)]) precision))
+          (push-normalized-density! 'baseline (for/list ([(_ precision) (in-hash baseline-max-precisions)]) precision))
+          (push-normalized-density! 'optimal optimal-precision-list))
 
         ; Close-to-optimal graph
         (when (and (equal? rival-status 'valid)
@@ -197,16 +206,6 @@
           (unless optimal-precision-list
             (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
           (define optimal-precisions (list->vector optimal-precision-list))
-          (define optimal-len (vector-length optimal-precisions))
-          (define (executions->max-precisions executions)
-            (define max-precisions (make-hash))
-            (for ([exec (in-vector executions)]
-                  #:when (and (>= (execution-number exec) 0)
-                              (< (execution-number exec) optimal-len)))
-              (define i (execution-number exec))
-              (define precision (execution-precision exec))
-              (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
-            max-precisions)
           (define rival-max-precisions (executions->max-precisions rival-executions))
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
           (for ([(i rival-precision) (in-hash rival-max-precisions)])
@@ -314,9 +313,9 @@
      (hash-set! instr-cnt-hash (list tool iter) (+ cnt cnt*))]
     ['density
      (define density-hash (hash-ref timeline key))
-     (define precision args*)
-     (define cnt (hash-ref density-hash precision (λ () 0)))
-     (hash-set! density-hash precision (add1 cnt))]
+     (match-define (list tool precision) args*)
+     (define cnt (hash-ref density-hash (list tool precision) (λ () 0)))
+     (hash-set! density-hash (list tool precision) (add1 cnt))]
     ['optimality
      (define optimality-hash (hash-ref timeline key))
      (match-define (list iter optimal-precision rival-precision baseline-precision) args*)
@@ -360,7 +359,7 @@
           (list (~a (car key)) (second key) value))
         'density
         (for/list ([(key value) (in-hash (hash-ref timeline 'density))])
-          (list key value))
+          (list (~a (first key)) (second key) value))
         'optimality
         (optimality->jsexpr (hash-ref timeline 'optimality))))
 
@@ -542,6 +541,7 @@
     (html-add-plot html-port "cnt_per_iters_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "repeats_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "density_plot.png" #:width 400 #:height 300)
+    (html-add-plot html-port "density_cdf_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "optimality_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "histogram_valid.png" #:width 650 #:height 275)
     (html-add-plot html-port "histogram_all.png" #:width 650 #:height 200))
