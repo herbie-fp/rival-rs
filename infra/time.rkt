@@ -12,7 +12,7 @@
          "profile.rkt"
          "run-sollya.rkt")
 
-(define *sampling-timeout* (make-parameter 20.0)) ; this parameter is used for plots generation
+(define *sampling-timeout* (make-parameter 50.0)) ; this parameter is used for plots generation
 
 ; These parameters are used for latex data
 (define *num-tuned-benchmarks* (make-parameter 0))

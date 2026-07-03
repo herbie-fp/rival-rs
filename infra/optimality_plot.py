@@ -38,10 +38,15 @@ def plot_optimality(outcomes, args):
     ax.bar(x + 0.075, tool_values("rival"), color="red", alpha=0.7, width=width, label="reval")
 
     ax.legend()
-    ax.set_xlabel("Iteration")
+    ax.set_xlabel("True uniform precision")
     ax.set_ylabel("Avg. precision overhead")
+    ax.set_yscale("symlog", linthresh=1)
+
     ax.set_xticks(x)
-    ax.set_xticklabels([f"{iteration}" for iteration in iterations])
+    ax.set_xticklabels([
+        "$2^{" + str(pos + 7) + "}$" if (pos + 7) % 2 == 1 else " "
+        for pos in range(len(iterations))
+    ])
     ax.yaxis.grid(True, linestyle="-", which="major", color="grey", alpha=0.3)
 
     plt.tight_layout()
@@ -80,8 +85,12 @@ def plot_relative_optimality(outcomes, args):
     ax.legend()
     ax.set_xlabel("Iteration")
     ax.set_ylabel("Avg. relative precision overhead")
+    ax.set_yscale("symlog", linthresh=1)
     ax.set_xticks(x)
-    ax.set_xticklabels([f"{iteration}" for iteration in iterations])
+    ax.set_xticklabels([
+        f"{iteration}" if iteration % 2 == 0 else " "
+        for iteration in iterations
+    ])
     ax.yaxis.grid(True, linestyle="-", which="major", color="grey", alpha=0.3)
 
     plt.tight_layout()
