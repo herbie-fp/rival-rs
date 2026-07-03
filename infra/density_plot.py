@@ -68,6 +68,7 @@ def plot_density_cdf(outcomes, args):
     ax.set_ylabel("Fraction of operations")
     ax.set_xlabel("Precision (normalized)")
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
+    ax.xaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
 
     plt.legend(loc="best")
     plt.tight_layout()

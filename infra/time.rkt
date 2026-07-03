@@ -46,6 +46,7 @@
     (error 'time "Optimal precision cache point count does not match benchmark expressions: ~a" exprs))
 
   (define number-of-ops (apply + (map depth-of-expr exprs)))
+  (define minimal-precision 53)
 
   ; Rival machine
   (define start-compile (current-inexact-milliseconds))
@@ -70,7 +71,7 @@
                                     (printf "Sollya didn't compile")
                                     (printf "~a\n" e)
                                     #f)])
-         (sollya-compile exprs vars 53))])) ; prec=53 is an imitation of flonum
+         (sollya-compile exprs vars minimal-precision))])) ; prec=53 is an imitation of flonum
 
   (define tuned-bench #f)
   (define times
@@ -157,11 +158,6 @@
             (define precision (execution-precision exec))
             (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
           max-precisions)
-
-        (define (push-normalized-density! tool precisions)
-          (define max-prec (apply max precisions))
-          (for ([precision (in-list precisions)])
-            (timeline-push! timeline'density (list tool (~a (exact->inexact (/ precision max-prec)) #:width 5)))))
         
         ; Store histograms data
         (when (> baseline-iteration 0)
@@ -188,6 +184,10 @@
             (timeline-push! timeline
                             'mixsample-baseline-all
                             (list (execution-time execution) name precision))))
+
+        (define (push-normalized-density! tool precisions max-prec)
+          (for ([precision (in-list precisions)])
+            (timeline-push! timeline 'density (list tool (~a (exact->inexact (/ precision max-prec)) #:width 5)))))
         
         ; Density plot data
         (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (> baseline-iteration 0))
@@ -195,9 +195,25 @@
             (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
           (define rival-max-precisions (executions->max-precisions rival-executions))
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
-          (push-normalized-density! 'rival (for/list ([(_ precision) (in-hash rival-max-precisions)]) precision))
-          (push-normalized-density! 'baseline (for/list ([(_ precision) (in-hash baseline-max-precisions)]) precision))
-          (push-normalized-density! 'optimal optimal-precision-list))
+          (define optimal-precision-list*
+            (for/list ([precision (in-list optimal-precision-list)])
+              (max minimal-precision precision)))
+
+          ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
+          (define rival-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
+          (for ([(i precision)
+                 (in-hash rival-max-precisions)]) (vector-set! rival-precisions-vector i (max minimal-precision precision)))
+          
+          (define baseline-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
+          (for ([(i precision) (in-hash baseline-max-precisions)])
+            (vector-set! baseline-precisions-vector i (max minimal-precision precision)))
+          
+          (define rival-precision-list (vector->list rival-precisions-vector))
+          (define baseline-precision-list (vector->list baseline-precisions-vector))
+          (define max-prec (apply max (append rival-precision-list baseline-precision-list optimal-precision-list*)))
+          (push-normalized-density! 'rival rival-precision-list max-prec)
+          (push-normalized-density! 'baseline baseline-precision-list max-prec)
+          (push-normalized-density! 'optimal optimal-precision-list* max-prec))
 
         ; Close-to-optimal graph
         (when (and (equal? rival-status 'valid)
@@ -208,13 +224,16 @@
           (define optimal-precisions (list->vector optimal-precision-list))
           (define rival-max-precisions (executions->max-precisions rival-executions))
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
-          (for ([(i rival-precision) (in-hash rival-max-precisions)])
-            (define optimal-precision (vector-ref optimal-precisions i))
-            (define baseline-precision (hash-ref baseline-max-precisions i 0))
+
+          ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
+          (for ([optimal-precision (in-vector optimal-precisions)]
+                [i (in-naturals)])
+            (define rival-precision (max minimal-precision (hash-ref rival-max-precisions i optimal-precision)))
+            (define baseline-precision (max minimal-precision (hash-ref baseline-max-precisions i optimal-precision)))
             (timeline-push! timeline
                             'optimality
                             (list baseline-iteration
-                                  optimal-precision
+                                  (max minimal-precision optimal-precision)
                                   rival-precision
                                   baseline-precision))))
         
