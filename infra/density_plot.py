@@ -15,7 +15,8 @@ def load_outcomes(path):
 
 def bucket_density(outcomes):
     outcomes = outcomes.copy()
-    outcomes['precision'] = np.array(outcomes['precision'], dtype=float) - np.array(outcomes['precision'], dtype=float) % 0.05
+    outcomes['precision'] = np.clip(np.array(outcomes['precision'], dtype=float), 0.0, 1.0)
+    outcomes['precision'] = np.minimum(np.floor(outcomes['precision'] / 0.05) * 0.05, 0.95)
     return outcomes.groupby(by=['tool', 'precision'], as_index=False, sort=True).sum()
 
 def plot_density(rival, args):
@@ -25,6 +26,9 @@ def plot_density(rival, args):
 
     ax.set_ylabel("Number of operations")
     ax.set_xlabel("Precision (normalized)")
+    ax.set_xlim(0.0, 1.0)
+    ax.set_xticks(np.linspace(0.0, 1.0, 6))
+    ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
 
     plt.legend()
@@ -41,7 +45,7 @@ def plot_density_cdf(outcomes, args):
 
     styles = {
         "optimal": ("orange", "-", "optimal"),
-        "rival": ("red", '.-', "rival"),
+        "rival": ("red", "-.", "rival"),
         "baseline": ("green", "--", "baseline"),
     }
     for tool in ["optimal", "rival", "baseline"]:
@@ -54,15 +58,18 @@ def plot_density_cdf(outcomes, args):
         y = np.concatenate(([0.0], np.array(tool_outcomes["cdf"], dtype=float)))
 
         color, linestyle, label = styles[tool]
-        ax.plot(x, y, linestyle, color=color, linewidth=2, label=label)
+        ax.step(x, y, where='post', linestyle=linestyle, color=color, linewidth=2, label=label)
 
-    ax.set_ylim(0, 1.01)
+    ax.set_ylim(0, 1.0)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_xticks(np.linspace(0.0, 1.0, 6))
+    ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
     ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
-    ax.set_ylabel("Operations at or below precision")
+    ax.set_ylabel("Fraction of operations")
     ax.set_xlabel("Precision (normalized)")
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
 
-    plt.legend()
+    plt.legend(loc="best")
     plt.tight_layout()
     plt.savefig(args.path + "/density_cdf_plot.pdf", format="pdf")
 
