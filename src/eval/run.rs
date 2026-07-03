@@ -99,6 +99,37 @@ impl<D: Discretization> Machine<D> {
         }
     }
 
+    /// Evaluate the machine using a Ziv-style uniform precision strategy.
+    ///
+    /// Ziv evaluation uses the same global precision schedule as baseline,
+    /// but every instruction is re-executed on every iteration and hints are
+    /// ignored.
+    pub fn apply_ziv(&mut self, args: &[Ival]) -> Result<Vec<Ival>, RivalError> {
+        self.load_arguments(args);
+
+        let start_prec = self.disc.target().saturating_add(10);
+        let mut prec = start_prec;
+        let mut iter: usize = 0;
+
+        loop {
+            self.iteration = iter;
+            self.ziv_adjust(prec);
+            self.run_ziv();
+
+            match self.collect_outputs()? {
+                Some(outputs) => return Ok(outputs),
+                None => {
+                    let next = prec.saturating_mul(2);
+                    if next > self.max_precision {
+                        return Err(RivalError::Unsamplable);
+                    }
+                    prec = next;
+                    iter = iter.saturating_add(1);
+                }
+            }
+        }
+    }
+
     /// Analyze an input rectangle using the baseline strategy,
     /// returning status, next hints, and a convergence flag.
     ///
@@ -295,6 +326,51 @@ impl<D: Discretization> Machine<D> {
                     self.registers[out_reg] = Ival::bool_interval(*value, *value);
                 }
             }
+        }
+    }
+
+    fn run_ziv(&mut self) {
+        for (idx, (instruction, &precision)) in
+            enumerate(izip!(&self.instructions, &self.precisions))
+        {
+            if self.profiling_enabled {
+                let start = std::time::Instant::now();
+                execute::evaluate_instruction(instruction, &mut self.registers, precision);
+                let dt = start.elapsed().as_secs_f64() * 1000.0;
+                let exec = Execution {
+                    name: instruction.data.name_static(),
+                    number: idx as i32,
+                    precision,
+                    time_ms: dt,
+                    iteration: self.iteration,
+                };
+                self.profiler.record(exec);
+            } else {
+                execute::evaluate_instruction(instruction, &mut self.registers, precision);
+            }
+        }
+    }
+
+    fn ziv_adjust(&mut self, new_prec: u32) {
+        let profiling = self.profiling_enabled;
+        let start_time = if profiling {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
+
+        self.precisions.fill(new_prec);
+        self.repeats.fill(false);
+
+        if profiling && let Some(t0) = start_time {
+            let dt_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            self.profiler.record(Execution {
+                name: "adjust",
+                number: -1,
+                precision: (self.iteration as u32) * 1000,
+                time_ms: dt_ms,
+                iteration: self.iteration,
+            });
         }
     }
 

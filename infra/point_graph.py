@@ -71,7 +71,7 @@ def plot_points_graph(outcomes):
     print("\\newcommand{\\SollyaExitCnt}{" + str(sollya_exit_cnt) + "\\xspace}")
     print("\\newcommand{\\RivalExitCnt}{" + str(rival_exit_cnt) + "\\xspace}")
     print("\\newcommand{\\BaselineExitCnt}{" + str(base_exit_cnt) + "\\xspace}")
-
+    
     print("\\newcommand{\\CorrecttoFaithfulSollya}{" + str(round(100*sollya_correct_cnt/(sollya_faithful_cnt+sollya_correct_cnt), 2)) + "\\xspace}")
     print("\\newcommand{\\SollyaFaithfulCnt}{" + str(sollya_faithful_cnt) + "\\xspace}")
     print("\\newcommand{\\SamplingInfiniteDifference}{" + str(infinite_difference) + "\\xspace}")
@@ -115,7 +115,7 @@ def plot_points_graph(outcomes):
 
 def load_outcomes(path):
     outcomes = json.load(open(path, "r"))["outcomes"]
-    outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_iter', 'number_of_ops', 'tool_name', 'number_of_points'])
+    outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_iter', 'ziv_iter', 'number_of_ops', 'tool_name', 'number_of_points'])
     return outcomes
 
 parser = argparse.ArgumentParser(prog='point_graph.py', description='Script outputs plots for a Herbie run')

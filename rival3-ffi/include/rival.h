@@ -305,6 +305,14 @@ RivalError rival_apply_baseline(struct RivalMachine *machine,
                                 const struct RivalHints *hints,
                                 uint32_t max_precision);
 
+RivalError rival_apply_ziv(struct RivalMachine *machine,
+                           const mpfr_t *const *args,
+                           uintptr_t n_args,
+                           mpfr_t *const *out,
+                           uintptr_t n_out,
+                           const struct RivalHints *hints,
+                           uint32_t max_precision);
+
 struct RivalOptimalPrecisionResult rival_machine_find_optimal_precisions(struct RivalMachine *machine,
                                                                          const mpfr_t *const *args);
 

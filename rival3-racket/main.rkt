@@ -14,6 +14,8 @@
          rival-machine-optimal-precision
          baseline-compile
          baseline-apply
+         ziv-compile
+         ziv-apply
          rival-analyze-with-hints
          rival-analyze
          baseline-analyze-with-hints
@@ -205,6 +207,9 @@
               (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
 
 (define-rival rival_apply_baseline
+              (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
+
+(define-rival rival_apply_ziv
               (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
 
 (define-rival rival_machine_find_optimal_precisions
@@ -498,6 +503,9 @@
     (error 'baseline-compile "Failed to configure baseline machine"))
   machine)
 
+(define (ziv-compile exprs vars discs)
+  (rival-compile exprs vars discs))
+
 (define (apply-inner machine pt hints call-fn error-name)
   (define n-args (vector-length pt))
   (define arg-ptrs (machine-wrapper-arg-buf machine))
@@ -567,6 +575,13 @@
                hints
                (lambda (m a na o no h) (rival_apply_baseline m a na o no h (*rival-max-precision*)))
                'baseline-apply))
+
+(define (ziv-apply machine pt [hints #f])
+  (apply-inner machine
+               pt
+               hints
+               (lambda (m a na o no h) (rival_apply_ziv m a na o no h (*rival-max-precision*)))
+               'ziv-apply))
 
 (define (analyze-inner machine rect hint ffi-fn error-name)
   (define n-args (vector-length rect))

@@ -47,8 +47,9 @@ def plot_density_cdf(outcomes, args):
         "optimal": ("orange", "-", "optimal"),
         "rival": ("red", "-.", "rival"),
         "baseline": ("green", "--", "baseline"),
+        "ziv": ("dimgrey", ":", "ziv"),
     }
-    for tool in ["optimal", "rival", "baseline"]:
+    for tool in ["optimal", "rival", "baseline", "ziv"]:
         tool_outcomes = outcomes[outcomes["tool"] == tool].copy()
         if tool_outcomes.empty:
             continue

@@ -16,6 +16,7 @@ def load_optimality(path):
             "optimal_precision",
             "rival_precision",
             "baseline_precision",
+            "ziv_precision",
         ],
     )
 
@@ -31,10 +32,10 @@ def plot_empty(args):
 
 def plot_optimality(outcomes, args):
 
-    for col in ["iteration", "optimal_precision", "rival_precision", "baseline_precision"]:
+    for col in ["iteration", "optimal_precision", "rival_precision", "baseline_precision", "ziv_precision"]:
         outcomes[col] = pd.to_numeric(outcomes[col], errors="coerce")
     outcomes = outcomes.dropna(
-        subset=["iteration", "optimal_precision", "rival_precision", "baseline_precision"]
+        subset=["iteration", "optimal_precision", "rival_precision", "baseline_precision", "ziv_precision"]
     )
     outcomes["iteration"] = outcomes["iteration"].astype(int)
 
@@ -47,8 +48,14 @@ def plot_optimality(outcomes, args):
     fig, ax = plt.subplots(figsize=(4, 3))
     fig.tight_layout(pad=2.0)
 
-    ax.bar(x + 0.925, outcomes["baseline_precision"], color="green", alpha=1, width=0.5, label="baseline", hatch="/")
-    ax.bar(x + 1.075, outcomes["rival_precision"], color="red", alpha=0.7, width=0.5, label="reval")
+    # ax.bar(x + 0.925, outcomes["baseline_precision"], color="green", alpha=1, width=0.5, label="baseline", hatch="/")
+    # ax.bar(x + 1.075, outcomes["rival_precision"], color="red", alpha=0.7, width=0.5, label="reval")
+    # ax.bar(x + 1.2, outcomes["ziv_precision"], color="purple", alpha=0.7, width=0.5, label="ziv")
+    
+    ax.bar(x + 0.825, outcomes["ziv_precision"], color="darkgrey", alpha=1, width=0.4, label='ziv', hatch='\\')
+    ax.bar(x + 1.0, outcomes["baseline_precision"], color="green", alpha=1, width=0.4, label='baseline', hatch='/')
+    ax.bar(x + 1.175, outcomes["rival_precision"], color="red", alpha=1, width=0.4, label='reval')
+    
     ax.plot(x + 1, outcomes["optimal_precision"], ".-", linewidth=2.0, color="orange", label="optimal")
 
     ax.legend()

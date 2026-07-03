@@ -183,13 +183,16 @@ unsafe fn apply_inner(
     n_out: usize,
     hints: *const RivalHints,
     max_precision: u32,
-    baseline: bool,
+    mode: ApplyMode,
 ) -> RivalError {
     if n_args != wrapper.n_vars || n_out != wrapper.n_exprs {
         return RivalError::InvalidInput;
     }
 
-    if !hints.is_null() && unsafe { (*hints).hints.len() } != wrapper.machine.instruction_count() {
+    if mode != ApplyMode::Ziv
+        && !hints.is_null()
+        && unsafe { (*hints).hints.len() } != wrapper.machine.instruction_count()
+    {
         return RivalError::InvalidInput;
     }
 
@@ -200,12 +203,17 @@ unsafe fn apply_inner(
     }
 
     wrapper.machine.set_max_precision(max_precision);
-    let hints_opt = unsafe { extract_hints(hints) };
 
-    let result = if baseline {
-        wrapper.machine.apply_baseline(&wrapper.arg_buf, hints_opt)
-    } else {
-        wrapper.machine.apply(&wrapper.arg_buf, hints_opt)
+    let result = match mode {
+        ApplyMode::Rival => {
+            let hints_opt = unsafe { extract_hints(hints) };
+            wrapper.machine.apply(&wrapper.arg_buf, hints_opt)
+        }
+        ApplyMode::Baseline => {
+            let hints_opt = unsafe { extract_hints(hints) };
+            wrapper.machine.apply_baseline(&wrapper.arg_buf, hints_opt)
+        }
+        ApplyMode::Ziv => wrapper.machine.apply_ziv(&wrapper.arg_buf),
     };
 
     match result {
@@ -216,6 +224,13 @@ unsafe fn apply_inner(
         Err(CoreError::InvalidInput) => RivalError::InvalidInput,
         Err(CoreError::Unsamplable) => RivalError::Unsamplable,
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ApplyMode {
+    Rival,
+    Baseline,
+    Ziv,
 }
 
 #[inline]
@@ -401,7 +416,7 @@ pub unsafe extern "C" fn rival_apply(
             n_out,
             hints,
             max_precision,
-            false,
+            ApplyMode::Rival,
         )
     }
 }
@@ -430,7 +445,36 @@ pub unsafe extern "C" fn rival_apply_baseline(
             n_out,
             hints,
             max_precision,
-            true,
+            ApplyMode::Baseline,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rival_apply_ziv(
+    machine: *mut RivalMachine,
+    args: *const *const mpfr_t,
+    n_args: usize,
+    out: *const *mut mpfr_t,
+    n_out: usize,
+    hints: *const RivalHints,
+    max_precision: u32,
+) -> RivalError {
+    if machine.is_null() || out.is_null() || (args.is_null() && n_args > 0) {
+        return RivalError::InvalidInput;
+    }
+
+    let wrapper = unsafe { &mut *machine };
+    unsafe {
+        apply_inner(
+            wrapper,
+            args,
+            n_args,
+            out,
+            n_out,
+            hints,
+            max_precision,
+            ApplyMode::Ziv,
         )
     }
 }

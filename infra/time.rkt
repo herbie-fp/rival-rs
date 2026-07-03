@@ -18,6 +18,7 @@
 (define *num-tuned-benchmarks* (make-parameter 0))
 (define *rival-timeout* (make-parameter 0))
 (define *baseline-timeout* (make-parameter 0))
+(define *ziv-timeout* (make-parameter 0))
 (define *sollya-timeout* (make-parameter 0))
 
 (define (read-from-string s)
@@ -55,10 +56,14 @@
       (rival-compile exprs vars discs)))
   (define compile-time (- (current-inexact-milliseconds) start-compile))
 
-  ; Baseline and Sollya machines
+  ; Baseline, Ziv, and Sollya machines
   (define baseline-machine
     (parameterize ([*rival-max-precision* 32256])
       (baseline-compile exprs vars discs)))
+
+  (define ziv-machine
+    (parameterize ([*rival-max-precision* 32256])
+      (ziv-compile exprs vars discs)))
 
   (define sollya-machine
     (match (or (equal? (cdr exprs) `((* (fmod (exp x) (sqrt (cos x))) (exp (neg x))))) ; id 65
@@ -94,6 +99,18 @@
         (if (zero? (vector-length baseline-executions))
             0
             (apply max (vector->list (vector-map execution-precision baseline-executions)))))
+
+      ; --------------------------- Ziv execution ---------------------------------------------------
+      (define ziv-start-apply (current-inexact-milliseconds))
+      (match-define (list ziv-status ziv-exs)
+        (parameterize ([*rival-max-precision* 32256])
+          (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
+                          [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
+            (define exs (vector-ref (ziv-apply ziv-machine (list->vector (map bf pt))) 1))
+            (list 'valid exs))))
+      (define ziv-apply-time (- (current-inexact-milliseconds) ziv-start-apply))
+      (define ziv-executions (rival-profile ziv-machine 'executions))
+      (define ziv-iteration (rival-profile ziv-machine 'iterations))
       
       ; --------------------------- Rival execution -------------------------------------------------
       (define rival-start-apply (current-inexact-milliseconds))
@@ -183,6 +200,18 @@
                               (list (execution-time execution) name precision)))
             (timeline-push! timeline
                             'mixsample-baseline-all
+                            (list (execution-time execution) name precision)))
+
+          ;; Ziv
+          (for ([execution (in-vector ziv-executions)])
+            (define name (execution-name execution))
+            (define precision (execution-precision execution))
+            (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid))
+              (timeline-push! timeline
+                              'mixsample-ziv-valid
+                              (list (execution-time execution) name precision)))
+            (timeline-push! timeline
+                            'mixsample-ziv-all
                             (list (execution-time execution) name precision))))
 
         (define (push-normalized-density! tool precisions max-prec)
@@ -190,11 +219,12 @@
             (timeline-push! timeline 'density (list tool (~a (exact->inexact (/ precision max-prec)) #:width 5)))))
         
         ; Density plot data
-        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (> baseline-iteration 0))
+        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid) (> baseline-iteration 0))
           (unless optimal-precision-list
             (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
           (define rival-max-precisions (executions->max-precisions rival-executions))
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
+          (define ziv-max-precisions (executions->max-precisions ziv-executions))
           (define optimal-precision-list*
             (for/list ([precision (in-list optimal-precision-list)])
               (max minimal-precision precision)))
@@ -207,12 +237,18 @@
           (define baseline-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
           (for ([(i precision) (in-hash baseline-max-precisions)])
             (vector-set! baseline-precisions-vector i (max minimal-precision precision)))
+
+          (define ziv-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
+          (for ([(i precision) (in-hash ziv-max-precisions)])
+            (vector-set! ziv-precisions-vector i (max minimal-precision precision)))
           
           (define rival-precision-list (vector->list rival-precisions-vector))
           (define baseline-precision-list (vector->list baseline-precisions-vector))
-          (define max-prec (apply max (append rival-precision-list baseline-precision-list optimal-precision-list*)))
+          (define ziv-precision-list (vector->list ziv-precisions-vector))
+          (define max-prec (apply max (append rival-precision-list baseline-precision-list ziv-precision-list optimal-precision-list*)))
           (push-normalized-density! 'rival rival-precision-list max-prec)
           (push-normalized-density! 'baseline baseline-precision-list max-prec)
+          (push-normalized-density! 'ziv ziv-precision-list max-prec)
           (push-normalized-density! 'optimal optimal-precision-list* max-prec))
 
         ; Close-to-optimal graph
@@ -224,17 +260,20 @@
           (define optimal-precisions (list->vector optimal-precision-list))
           (define rival-max-precisions (executions->max-precisions rival-executions))
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
+          (define ziv-max-precisions (executions->max-precisions ziv-executions))
 
           ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
           (for ([optimal-precision (in-vector optimal-precisions)]
                 [i (in-naturals)])
             (define rival-precision (max minimal-precision (hash-ref rival-max-precisions i optimal-precision)))
             (define baseline-precision (max minimal-precision (hash-ref baseline-max-precisions i optimal-precision)))
+            (define ziv-precision (max minimal-precision (hash-ref ziv-max-precisions i optimal-precision)))
             (timeline-push! timeline
                             'optimality
                             (list baseline-iteration
                                   (max minimal-precision optimal-precision)
                                   rival-precision
+                                  ziv-precision
                                   baseline-precision))))
         
         ; Percentage of instructions has been executed graph
@@ -255,7 +294,16 @@
                             (list 'baseline (execution-iteration execution) 1)))
           (define baseline-ivec-len (rival-profile baseline-machine 'instructions))
           (for ([n (in-range (add1 baseline-iteration))])
-            (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n baseline-ivec-len))))
+            (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n baseline-ivec-len)))
+
+          ;; Ziv
+          (for ([execution (in-vector ziv-executions)])
+            (timeline-push! timeline
+                            'instr-executed-cnt
+                            (list 'ziv (execution-iteration execution) 1)))
+          (define ziv-ivec-len (rival-profile ziv-machine 'instructions))
+          (for ([n (in-range (add1 ziv-iteration))])
+            (timeline-push! timeline 'instr-executed-cnt (list 'ziv-no-repeats n ziv-ivec-len))))
 
         ; Speed graph and number of points graph
         (when (> (*sampling-timeout*) sollya-apply-time)
@@ -266,10 +314,14 @@
                            baseline-status
                            baseline-apply-time
                            baseline-exs
+                           ziv-status
+                           ziv-apply-time
+                           ziv-exs
                            sollya-status
                            sollya-apply-time
                            sollya-exs
                            baseline-iteration
+                           ziv-iteration
                            rival-iter
                            number-of-ops))
 
@@ -279,11 +331,13 @@
         (when (<= (*sampling-timeout*) rival-apply-time)
           (*rival-timeout* (add1 (*rival-timeout*))))
         (when (<= (*sampling-timeout*) baseline-apply-time)
-          (*baseline-timeout* (add1 (*baseline-timeout*)))))
+          (*baseline-timeout* (add1 (*baseline-timeout*))))
+        (when (<= (*sampling-timeout*) ziv-apply-time)
+          (*ziv-timeout* (add1 (*ziv-timeout*)))))
       
       ; Count differences
       (define rival-baseline-difference
-        (if (not (equal? rival-status baseline-status)) 1 0))
+        (if (or (not (equal? rival-status baseline-status)) (not (equal? rival-status ziv-status))) 1 0))
       (cons rival-status (cons rival-apply-time rival-baseline-difference))))
   
   ; Zombie process
@@ -310,17 +364,19 @@
 (define (timeline-push! timeline key args*)
   (match key
     ['outcomes
-     (match-define (list status rival-iter baseline-iter number-of-ops time*) args*)
+     (match-define (list status rival-iter baseline-iter ziv-iter number-of-ops time*) args*)
      (define outcomes-hash (hash-ref timeline key))
      (match-define (list time num-points)
-       (hash-ref outcomes-hash (list status rival-iter baseline-iter number-of-ops) (λ () (list 0 0))))
+       (hash-ref outcomes-hash (list status rival-iter baseline-iter ziv-iter number-of-ops) (λ () (list 0 0))))
      (hash-set! outcomes-hash
-                (list status rival-iter baseline-iter number-of-ops)
+                (list status rival-iter baseline-iter ziv-iter number-of-ops)
                 (list (+ time time*) (+ num-points 1)))]
     [(or 'mixsample-rival-valid
          'mixsample-rival-all
          'mixsample-baseline-valid
-         'mixsample-baseline-all)
+         'mixsample-baseline-all
+         'mixsample-ziv-valid
+         'mixsample-ziv-all)
      (define mixsample-hash (hash-ref timeline key))
      (match-define (list time* name precision) args*)
      (define time (hash-ref mixsample-hash (list name precision) (λ () 0)))
@@ -337,14 +393,15 @@
      (hash-set! density-hash (list tool precision) (add1 cnt))]
     ['optimality
      (define optimality-hash (hash-ref timeline key))
-     (match-define (list iter optimal-precision rival-precision baseline-precision) args*)
-     (match-define (list optimal-total rival-total baseline-total cnt)
-       (hash-ref optimality-hash iter (λ () (list 0.0 0.0 0.0 0))))
+     (match-define (list iter optimal-precision rival-precision ziv-precision baseline-precision) args*)
+     (match-define (list optimal-total rival-total baseline-total ziv-total cnt)
+       (hash-ref optimality-hash iter (λ () (list 0.0 0.0 0.0 0.0 0))))
      (hash-set! optimality-hash
                 iter
                 (list (+ optimal-total optimal-precision)
                       (+ rival-total rival-precision)
                       (+ baseline-total baseline-precision)
+                      (+ ziv-total ziv-precision)
                       (add1 cnt)))]
     [else (error "Unknown key for timeline!")]))
 
@@ -352,15 +409,16 @@
   (define (optimality->jsexpr optimality-hash)
     (for/list ([(key value) (in-hash optimality-hash)])
        (define iter key)
-       (match-define (list optimal-total rival-total baseline-total cnt) value)
+       (match-define (list optimal-total rival-total baseline-total ziv-total cnt) value)
        (list iter
              (~a (exact->inexact (/ optimal-total cnt)) #:width 5)
              (~a (exact->inexact (/ rival-total cnt)) #:width 5)
-             (~a (exact->inexact (/ baseline-total cnt)) #:width 5))))
+             (~a (exact->inexact (/ baseline-total cnt)) #:width 5)
+             (~a (exact->inexact (/ ziv-total cnt)) #:width 5))))
   
   (hash 'outcomes
         (for/list ([(key value) (in-hash (hash-ref timeline 'outcomes))])
-          (list (first value) (second key) (third key) (fourth key) (first key) (second value)))
+          (list (first value) (second key) (third key) (fourth key) (fifth key) (first key) (second value)))
         'mixsample-rival-valid
         (for/list ([(key value) (in-hash (hash-ref timeline 'mixsample-rival-valid))])
           (list value (car key) (second key)))
@@ -372,6 +430,12 @@
           (list value (car key) (second key)))
         'mixsample-baseline-all
         (for/list ([(key value) (in-hash (hash-ref timeline 'mixsample-baseline-all))])
+          (list value (car key) (second key)))
+        'mixsample-ziv-valid
+        (for/list ([(key value) (in-hash (hash-ref timeline 'mixsample-ziv-valid))])
+          (list value (car key) (second key)))
+        'mixsample-ziv-all
+        (for/list ([(key value) (in-hash (hash-ref timeline 'mixsample-ziv-all))])
           (list value (car key) (second key)))
         'instr-executed-cnt
         (for/list ([(key value) (in-hash (hash-ref timeline 'instr-executed-cnt))])
@@ -398,8 +462,10 @@
      (list (cons 'outcomes (make-hash))
            (cons 'mixsample-rival-valid (make-hash))
            (cons 'mixsample-baseline-valid (make-hash))
+           (cons 'mixsample-ziv-valid (make-hash))
            (cons 'mixsample-rival-all (make-hash))
            (cons 'mixsample-baseline-all (make-hash))
+           (cons 'mixsample-ziv-all (make-hash))
            (cons 'instr-executed-cnt (make-hash))
            (cons 'density (make-hash))
            (cons 'optimality (make-hash)))))
@@ -440,6 +506,7 @@
   (printf "\tNUMBER OF TUNED BENCHMARKS = ~a\n" (*num-tuned-benchmarks*))
   (printf "\tRIVAL TIMEOUTS = ~a\n" (*rival-timeout*))
   (printf "\tBASELINE TIMEOUTS = ~a\n" (*baseline-timeout*))
+  (printf "\tZIV TIMEOUTS = ~a\n" (*ziv-timeout*))
   (printf "\tSOLLYA TIMEOUTS = ~a\n" (*sollya-timeout*))
 
   (when timeline-port
@@ -550,12 +617,6 @@
     (html-add-plot html-port "ratio_plot_iter.png" #:width 400 #:height 250)
     (html-add-plot html-port "ratio_plot_precision.png" #:width 400 #:height 250)
     (html-add-plot html-port "ratio_plot_precision_base_norm.png" #:width 400 #:height 250)
-
-    (html-add-plot html-port "scalability_plot1.png" #:width 400 #:height 250)
-    (html-add-plot html-port "scalability_plot2.png" #:width 400 #:height 250)
-    (html-add-plot html-port "scalability_plot3.png" #:width 400 #:height 250)
-    (html-add-plot html-port "scalability_plot4.png" #:width 400 #:height 250)
-
     (html-add-plot html-port "point_graph.png" #:width 400 #:height 350)
     (html-add-plot html-port "cnt_per_iters_plot.png" #:width 400 #:height 300)
     (html-add-plot html-port "repeats_plot.png" #:width 400 #:height 300)
@@ -621,10 +682,14 @@
                          baseline-status
                          baseline-time
                          baseline-exs
+                         ziv-status
+                         ziv-time
+                         ziv-exs
                          sollya-status
                          sollya-time
                          sollya-exs
                          baseline-iter
+                         ziv-iter
                          rival-iter
                          number-of-ops)
 
@@ -634,10 +699,8 @@
       [(flinfinite? exs) (format "~a-inf" status)]
       [else (format "~a-real" status)]))
 
-  (define (push-outcome! status rival-iter* baseline-iter* time*)
-    (timeline-push! timeline
-                    'outcomes
-                    (list status rival-iter* baseline-iter* number-of-ops time*)))
+  (define (push-outcome! status time*)
+    (timeline-push! timeline  'outcomes (list status rival-iter baseline-iter ziv-iter number-of-ops time*)))
 
   (cond
     ; Rival has produced valid outcomes
@@ -647,93 +710,70 @@
        ; These points will go into speed graph
        [(and (equal? 'valid sollya-status)
              (equal? 'valid baseline-status)
-             (equal? rival-status 'valid)
+             (equal? 'valid ziv-status)
+             (equal? 'valid rival-status)
              (> (*sampling-timeout*) sollya-time)
              (> (*sampling-timeout*) rival-time)
-             (> (*sampling-timeout*) baseline-time))
-        (push-outcome! "valid-sollya" rival-iter baseline-iter sollya-time)
-        (push-outcome! "valid-baseline" rival-iter baseline-iter baseline-time)
-        (push-outcome! "valid-rival" rival-iter baseline-iter rival-time)
+             (> (*sampling-timeout*) baseline-time)
+             (> (*sampling-timeout*) ziv-time))
+        (push-outcome! "valid-sollya" sollya-time)
+        (push-outcome! "valid-baseline" baseline-time)
+        (push-outcome! "valid-ziv" ziv-time)
+        (push-outcome! "valid-rival" rival-time)
         (if (or (fl= rival-exs sollya-exs)
                 (and (fl= rival-exs (fl 0.0)) (fl= sollya-exs (fl -0.0)))
                 (and (fl= rival-exs (fl -0.0)) (fl= sollya-exs (fl 0.0))))
-            (push-outcome! "sollya-correct-rounding" 0 0 0)
-            (push-outcome! "sollya-faithful-rounding" 0 0 0))]
+            (push-outcome! "sollya-correct-rounding" 0)
+            (push-outcome! "sollya-faithful-rounding" 0))]
 
+       ; Ziv's points do not go into point graph
        ; Baseline and Rival have succeeded
        [(and (equal? 'valid baseline-status) (equal? rival-status 'valid))
-        (push-outcome! (status-subbucketing "valid-rival+baseline" rival-exs)
-                       rival-iter
-                       baseline-iter
-                       rival-time)]
+        (push-outcome! (status-subbucketing "valid-rival+baseline" rival-exs) rival-time)]
 
        ; Baseline and Sollya have succeeded
        [(and (equal? 'valid sollya-status) (equal? 'valid baseline-status))
-        (push-outcome! (status-subbucketing "valid-sollya+baseline" baseline-exs)
-                       rival-iter
-                       baseline-iter
-                       sollya-time)]
+        (push-outcome! (status-subbucketing "valid-sollya+baseline" baseline-exs) sollya-time)]
 
        ; Sollya and Rival have succeeded
        [(and (equal? 'valid sollya-status) (equal? rival-status 'valid))
-        (push-outcome! (status-subbucketing "valid-rival+sollya" rival-exs)
-                       rival-iter
-                       baseline-iter
-                       rival-time)]
+        (push-outcome! (status-subbucketing "valid-rival+sollya" rival-exs) rival-time)]
 
        ; Only Rival has succeeded
        [(equal? rival-status 'valid)
-        (push-outcome! (status-subbucketing "valid-rival-only" rival-exs)
-                       rival-iter
-                       baseline-iter
-                       rival-time)]
+        (push-outcome! (status-subbucketing "valid-rival-only" rival-exs) rival-time)]
 
        ; Only Sollya has succeeded
        [(equal? 'valid sollya-status)
-        (push-outcome! (status-subbucketing "valid-sollya-only" sollya-exs)
-                       rival-iter
-                       baseline-iter
-                       sollya-time)]
+        (push-outcome! (status-subbucketing "valid-sollya-only" sollya-exs) sollya-time)]
 
        ; Only Baseline has succeeded
        [(equal? 'valid baseline-status)
-        (push-outcome! (status-subbucketing "valid-baseline-only" baseline-exs)
-                       rival-iter
-                       baseline-iter
-                       baseline-time)]
+        (push-outcome! (status-subbucketing "valid-baseline-only" baseline-exs) baseline-time)]
 
        ; timeout at all the tools
        [else
-        (push-outcome! "exit-baseline" rival-iter baseline-iter baseline-time)
-        (push-outcome! "exit-sollya" rival-iter baseline-iter sollya-time)
-        (push-outcome! "exit-rival" rival-iter baseline-iter rival-time)])]
+        (push-outcome! "exit-baseline" baseline-time)
+        (push-outcome! "exit-sollya" sollya-time)
+        (push-outcome! "exit-rival" rival-time)])]
 
     ; Rival has exited
     [(equal? rival-status 'unsamplable)
      (cond
        ; Sollya and Baseline have succeeded
        [(and (equal? 'valid sollya-status) (equal? 'valid baseline-status))
-        (push-outcome! (status-subbucketing "valid-sollya+baseline" baseline-exs)
-                       rival-iter
-                       baseline-iter
-                       sollya-time)]
+        (push-outcome! (status-subbucketing "valid-sollya+baseline" baseline-exs) sollya-time)]
 
        ; Only Sollya has succeeded
        [(equal? 'valid sollya-status)
-        (push-outcome! (status-subbucketing "valid-sollya-only" sollya-exs)
-                       rival-iter
-                       baseline-iter
-                       sollya-time)]
+        (push-outcome! (status-subbucketing "valid-sollya-only" sollya-exs) sollya-time)]
 
        ; Only Baseline has succeeded
        [(equal? 'valid baseline-status)
-        (push-outcome! (status-subbucketing "valid-baseline-only" baseline-exs)
-                       rival-iter
-                       baseline-iter
-                       baseline-time)]
+        (push-outcome! (status-subbucketing "valid-baseline-only" baseline-exs) baseline-time)]
 
        ; Points that every tools fail to evaluate when the precision is unreacheble
        [else
-        (push-outcome! "exit-baseline" rival-iter baseline-iter baseline-time)
-        (push-outcome! "exit-sollya" rival-iter baseline-iter sollya-time)
-        (push-outcome! "exit-rival" rival-iter baseline-iter rival-time)])]))
+        (push-outcome! "exit-baseline" baseline-time)
+        (push-outcome! "exit-sollya" sollya-time)
+        (push-outcome! "exit-rival" rival-time)])]))
