@@ -210,7 +210,7 @@
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
           (for ([(i rival-precision) (in-hash rival-max-precisions)])
             (define optimal-precision (vector-ref optimal-precisions i))
-            (define baseline-precision (hash-ref baseline-max-precisions i))
+            (define baseline-precision (hash-ref baseline-max-precisions i 0))
             (timeline-push! timeline
                             'optimality
                             (list baseline-iteration
