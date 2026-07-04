@@ -38,6 +38,8 @@ def plot_histogram_valid(args):
     buckets_rival = bucket_precisions_by_bins(rival, bins)
     buckets_ziv = bucket_precisions_by_bins(ziv, bins)
 
+    ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
+    
     ax.bar(np.arange(len(bins)) + 0.3, buckets_ziv, color="darkgrey", alpha=1, width=0.45, label='ziv', hatch='\\')
     ax.bar(np.arange(len(bins)) + 0.5, buckets_base, color="green", alpha=1, width=0.45, label='baseline', hatch='/')
     ax.bar(np.arange(len(bins)) + 0.7, buckets_rival, color="red", alpha=1, width=0.45, label='reval')
@@ -45,7 +47,6 @@ def plot_histogram_valid(args):
     # ax.bar(np.arange(len(bins)) + 0.3, buckets_base, color="green", alpha=1, width=0.25, label='baseline', hatch='/')
     # ax.bar(np.arange(len(bins)) + 0.55, buckets_rival, color="red", alpha=0.7, width=0.25, label='reval')
     # ax.bar(np.arange(len(bins)) + 0.8, buckets_ziv, color="purple", alpha=0.7, width=0.25, label='ziv')
-
 
     tuning_time_ziv = np.zeros_like(buckets_ziv)
     tuning_time_ziv[-1] = adjust_time_ziv
@@ -60,8 +61,6 @@ def plot_histogram_valid(args):
     tuning_time_rival = np.zeros_like(buckets_rival)
     tuning_time_rival[-1] = adjust_time_rival
     ax.bar(np.arange(len(bins)) + 0.2, tuning_time_rival, color="red", alpha=1, width=0.45)
-
-    ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
 
     ax.set_xticks(np.arange(len(bins)), bins)
     ax.set_xticklabels(["$2^{" + str(i+5) + "}$" if i != 11 else "tuning" for i, x in enumerate(bins)])
@@ -99,7 +98,9 @@ def plot_histogram_all(args):
     buckets_base = bucket_precisions_by_bins(baseline, bins)
     buckets_rival = bucket_precisions_by_bins(rival, bins)
     buckets_ziv = bucket_precisions_by_bins(ziv, bins)
-
+    
+    ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
+    
     ax.bar(np.arange(len(bins)) + 0.3, buckets_ziv, color="darkgrey", alpha=1, width=0.45, label='ziv', hatch='\\')
     ax.bar(np.arange(len(bins)) + 0.5, buckets_base, color="green", alpha=1, width=0.45, label='baseline', hatch='/')
     ax.bar(np.arange(len(bins)) + 0.7, buckets_rival, color="red", alpha=1, width=0.45, label='reval')
@@ -122,7 +123,7 @@ def plot_histogram_all(args):
     tuning_time_rival[-1] = adjust_time_rival
     ax.bar(np.arange(len(bins)) + 0.2, tuning_time_rival, color="red", alpha=1, width=0.45)
     
-    ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
+    
 
     ax.set_xticks(np.arange(len(bins)), bins)
     ax.set_xticklabels(["$2^{" + str(i+5) + "}$" if i != 11 else "tuning" for i, x in enumerate(bins)])

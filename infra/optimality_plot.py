@@ -53,6 +53,8 @@ def plot_optimality(outcomes, args):
     # ax.bar(x + 1.075, outcomes["rival_precision"], color="red", alpha=0.7, width=0.5, label="reval")
     # ax.bar(x + 1.2, outcomes["ziv_precision"], color="purple", alpha=0.7, width=0.5, label="ziv")
     
+    ax.yaxis.grid(True, linestyle="-", which="major", color="grey", alpha=0.3)
+    
     ax.bar(x + 0.825, outcomes["ziv_precision"], color="darkgrey", alpha=1, width=0.4, label='ziv', hatch='\\')
     ax.bar(x + 1.0, outcomes["baseline_precision"], color="green", alpha=1, width=0.4, label='baseline', hatch='/')
     ax.bar(x + 1.175, outcomes["rival_precision"], color="red", alpha=1, width=0.4, label='reval')
@@ -69,7 +71,6 @@ def plot_optimality(outcomes, args):
         "$2^{" + str(pos + 7) + "}$" if (pos + 7) % 2 == 1 else " "
         for pos in range(len(iterations))
     ])
-    ax.yaxis.grid(True, linestyle="-", which="major", color="grey", alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(args.path + "/optimality_plot.pdf", format="pdf")
