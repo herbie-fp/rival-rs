@@ -46,19 +46,20 @@ def plot_histogram_valid(args):
     # ax.bar(np.arange(len(bins)) + 0.55, buckets_rival, color="red", alpha=0.7, width=0.25, label='reval')
     # ax.bar(np.arange(len(bins)) + 0.8, buckets_ziv, color="purple", alpha=0.7, width=0.25, label='ziv')
 
+
+    tuning_time_ziv = np.zeros_like(buckets_ziv)
+    tuning_time_ziv[-1] = adjust_time_ziv
+    ax.bar(np.arange(len(bins)) - 0.2, tuning_time_ziv, color="darkgrey", alpha=1, width=0.45, hatch='\\')
+    
     # Baseline tuning time
     tuning_time_baseline = np.zeros_like(buckets_base)
     tuning_time_baseline[-1] = adjust_time_baseline
-    ax.bar(np.arange(len(bins)) - 0.1, tuning_time_baseline, color="green", alpha=1, width=0.6, hatch='/')
+    ax.bar(np.arange(len(bins)), tuning_time_baseline, color="green", alpha=1, width=0.45, hatch='/')
 
     # Reval tuning time
     tuning_time_rival = np.zeros_like(buckets_rival)
     tuning_time_rival[-1] = adjust_time_rival
-    ax.bar(np.arange(len(bins)) + 0.1, tuning_time_rival, color="red", alpha=0.7, width=0.6)
-
-    tuning_time_ziv = np.zeros_like(buckets_ziv)
-    tuning_time_ziv[-1] = adjust_time_ziv
-    ax.bar(np.arange(len(bins)) + 0.2, tuning_time_ziv, color="purple", alpha=0.7, width=0.6)
+    ax.bar(np.arange(len(bins)) + 0.2, tuning_time_rival, color="red", alpha=1, width=0.45)
 
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
 
@@ -107,20 +108,20 @@ def plot_histogram_all(args):
     # ax.bar(np.arange(len(bins)) + 0.55, buckets_rival, color="red", alpha=0.7, width=0.25, label='reval')
     # ax.bar(np.arange(len(bins)) + 0.8, buckets_ziv, color="purple", alpha=0.7, width=0.25, label='ziv')
 
+    tuning_time_ziv = np.zeros_like(buckets_ziv)
+    tuning_time_ziv[-1] = adjust_time_ziv
+    ax.bar(np.arange(len(bins)) - 0.2, tuning_time_ziv, color="darkgrey", alpha=1, width=0.45, hatch='\\')
+    
     # Baseline tuning time
     tuning_time_baseline = np.zeros_like(buckets_base)
     tuning_time_baseline[-1] = adjust_time_baseline
-    ax.bar(np.arange(len(bins)) - 0.1, tuning_time_baseline, color="green", alpha=1, width=0.6, hatch='/')
- 
+    ax.bar(np.arange(len(bins)), tuning_time_baseline, color="green", alpha=1, width=0.45, hatch='/')
+
     # Reval tuning time
     tuning_time_rival = np.zeros_like(buckets_rival)
     tuning_time_rival[-1] = adjust_time_rival
-    ax.bar(np.arange(len(bins)) + 0.1, tuning_time_rival, color="red", alpha=0.7, width=0.6)
-
-    tuning_time_ziv = np.zeros_like(buckets_ziv)
-    tuning_time_ziv[-1] = adjust_time_ziv
-    ax.bar(np.arange(len(bins)) + 0.2, tuning_time_ziv, color="purple", alpha=0.7, width=0.6)
-
+    ax.bar(np.arange(len(bins)) + 0.2, tuning_time_rival, color="red", alpha=1, width=0.45)
+    
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
 
     ax.set_xticks(np.arange(len(bins)), bins)
