@@ -221,7 +221,10 @@
         ; Density plot data
         (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid) (> baseline-iteration 0))
           (unless optimal-precision-list
-            (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
+            (set! optimal-precision-list
+                  (vector->list
+                   (parameterize ([*rival-max-precision* 32256])
+                     (rival-machine-find-optimal-precisions rival-machine (list->vector (map bf pt)))))))
           (define rival-max-precisions (executions->max-precisions rival-executions))
           (define baseline-max-precisions (executions->max-precisions baseline-executions))
           (define ziv-max-precisions (executions->max-precisions ziv-executions))
