@@ -37,13 +37,13 @@ pub(super) fn precision_tuning<D: Discretization>(
             .saturating_add(parent_upper)
             .clamp(machine.min_precision, machine.max_precision);
 
-        if machine.lower_bound_early_stopping {
-            if parent_lower >= machine.max_precision {
-                return true;
-            }
-        } else if vprecs_max[idx] == machine.max_precision {
-            return true;
-        }
+        // if machine.lower_bound_early_stopping {
+        //     if parent_lower >= machine.max_precision {
+        //         return true;
+        //     }
+        // } else if vprecs_max[idx] == machine.max_precision {
+        //     return true;
+        // }
 
         // Propagate precision requirements to children based on error amplification.
         match &instruction.data {

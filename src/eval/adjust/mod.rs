@@ -157,7 +157,9 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
         any_reevaluation =
             update_repeats(machine, &mut work_repeats, &vprecs_max, first_tuning_pass);
         if !any_reevaluation {
-            work_repeats.fill(true);
+	    // Machine got stuck
+	    // work_repeats.fill(true);
+            return true
         }
     }
 
