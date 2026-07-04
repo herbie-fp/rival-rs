@@ -14,10 +14,16 @@ def load_outcomes(path):
     return outcomes
 
 def bucket_density(outcomes):
-    outcomes = outcomes.copy()
-    outcomes['precision'] = np.clip(np.array(outcomes['precision'], dtype=float), 0.0, 1.0)
-    outcomes['precision'] = np.minimum(np.floor(outcomes['precision'] / 0.05) * 0.05, 0.95)
-    return outcomes.groupby(by=['tool', 'precision'], as_index=False, sort=True).sum()
+    outcomes1 = outcomes.copy()
+    outcomes1['precision'] = np.array(outcomes1['precision'], dtype=float)
+    outcomes1['precision'] = np.floor(outcomes1['precision'] / 0.01) * 0.01
+    outcomes1 = outcomes1.groupby(by=['tool', 'precision'], as_index=False, sort=True).sum()
+
+    outcomes2 = outcomes.copy()
+    outcomes2['precision'] = np.clip(np.array(outcomes2['precision'], dtype=float), 0.0, 1.0)
+    outcomes2['precision'] = np.minimum(np.floor(outcomes2['precision'] / 0.05) * 0.05, 0.95)
+    outcomes2 = outcomes2.groupby(by=['tool', 'precision'], as_index=False, sort=True).sum()
+    return outcomes1, outcomes2
 
 def plot_density(rival, args):
     fig, ax = plt.subplots(figsize=(4, 3))
@@ -55,14 +61,14 @@ def plot_density_cdf(outcomes, args):
             continue
         total = tool_outcomes["count"].sum()
         tool_outcomes["cdf"] = tool_outcomes["count"].cumsum() / total
-        x = np.concatenate(([0.0], np.array(tool_outcomes['precision']+0.05, dtype=float)))
+        x = np.concatenate(([0.0], np.array(tool_outcomes['precision'], dtype=float)))
         y = np.concatenate(([0.0], np.array(tool_outcomes["cdf"], dtype=float)))
 
         color, linestyle, label = styles[tool]
         ax.step(x, y, where='post', linestyle=linestyle, color=color, linewidth=2, label=label)
 
-    ax.set_ylim(0, 1.0)
-    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.set_xlim(-0.05, 1.05)
     ax.set_xticks(np.linspace(0.0, 1.0, 6))
     ax.xaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
     ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
@@ -82,13 +88,13 @@ def plot_density_cdf(outcomes, args):
 
 def plot_density_plots(args):
     outcomes = load_outcomes(args.timeline)
-    outcomes = bucket_density(outcomes)
-    rival = outcomes[outcomes["tool"] == "rival"]
+    outcomes1, outcomes2 = bucket_density(outcomes)
+    rival = outcomes2[outcomes2["tool"] == "rival"]
 
     print("\\newcommand{\\DensityPercentageOfLowerPrecision}{" + str(round(rival["count"][:4].sum() / rival["count"].sum() * 100, 2)) + "}")
 
     plot_density(rival, args)
-    plot_density_cdf(outcomes, args)
+    plot_density_cdf(outcomes1, args)
 
 parser = argparse.ArgumentParser(prog='histograms.py', description='Script outputs mixed precision histograms for a Herbie run')
 parser.add_argument('-t', '--timeline', dest='timeline', default="report/timeline.json")

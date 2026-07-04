@@ -31,12 +31,12 @@ def plot_speed_graph_rival_iter(outcomes, args):
     # Plot Rival
     ax.plot(tool_cmp2speed(rival_cmp)[0], np.array(tool_cmp2speed(rival_cmp)[1])/base, '.-', linewidth=2.0, color='r', label='reval')
     # Plot Baseline
+    ax.plot(tool_cmp2speed(ziv_cmp)[0], np.array(tool_cmp2speed(ziv_cmp)[1])/base, '-', linewidth=2.0, color='dimgrey',
+            label='ziv')
     ax.plot(tool_cmp2speed(baseline_cmp)[0], np.array(tool_cmp2speed(baseline_cmp)[1])/base, '--', linewidth=2.0, color='g',
             label='baseline')
-    ax.plot(tool_cmp2speed(ziv_cmp)[0], np.array(tool_cmp2speed(ziv_cmp)[1])/base, ':', linewidth=2.0, color='dimgrey',
-            label='ziv')
     # Plot Sollya
-    ax.plot(tool_cmp2speed(sollya_cmp)[0], np.array(tool_cmp2speed(sollya_cmp)[1])/base, '-', linewidth=2.0, color='b',
+    ax.plot(tool_cmp2speed(sollya_cmp)[0], np.array(tool_cmp2speed(sollya_cmp)[1])/base, ':', linewidth=2.0, color='b',
             label='sollya')
 
     ax.legend()
@@ -100,12 +100,12 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     # Plot Rival
     ax.plot(np.arange(len(x)), np.array(tool_cmp2speed(rival_cmp)[1])/base, '.-', linewidth=2.0, color='r', label='reval')
     # Plot Baseline
+    ax.plot(np.arange(len(x)), np.array(tool_cmp2speed(ziv_cmp)[1])/base, '-', linewidth=2.0, color='dimgrey',
+            label='ziv')
     ax.plot(np.arange(len(x)), np.array(tool_cmp2speed(baseline_cmp)[1])/base, '--', linewidth=2.0, color='g',
             label='baseline')
-    ax.plot(np.arange(len(x)), np.array(tool_cmp2speed(ziv_cmp)[1])/base, ':', linewidth=2.0, color='dimgrey',
-            label='ziv')
     # Plot Sollya
-    ax.plot(np.arange(len(x)), np.array(tool_cmp2speed(sollya_cmp)[1])/base, '-', linewidth=2.0, color='b',
+    ax.plot(np.arange(len(x)), np.array(tool_cmp2speed(sollya_cmp)[1])/base, ':', linewidth=2.0, color='b',
             label='sollya')
 
     ax.legend()

@@ -3,6 +3,7 @@ import json
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 
@@ -61,7 +62,8 @@ def plot_optimality(outcomes, args):
     ax.legend()
     ax.set_xlabel("True uniform precision")
     ax.set_ylabel("Avg. precision")
-    ax.set_yscale("symlog", linthresh=1)
+    ax.set_yscale("symlog", base=2, linthresh=1)
+    ax.yaxis.set_major_locator(ticker.LogLocator(base=2.0))
     ax.set_xticks(x + 1)
     ax.set_xticklabels([
         "$2^{" + str(pos + 7) + "}$" if (pos + 7) % 2 == 1 else " "
