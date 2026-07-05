@@ -139,6 +139,7 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
 
     // Step 4: If no precision increase, try logspan bumps.
     if !any_reevaluation {
+	println!("bumps!");
         // Bumps mode adds precision based on interval width (logspan) rather than slack.
         machine.bumps = machine.bumps.saturating_add(1);
         machine.bumps_activated = true;
