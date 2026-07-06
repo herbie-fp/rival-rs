@@ -17,6 +17,8 @@ def plot_repeats_plot(outcomes, args):
     rival_no_repeats = (outcomes.loc[(outcomes['tool'] == "rival-no-repeats") & (outcomes['iter'] > 0)]).sort_values(by=['iter'])
     baseline = (outcomes.loc[(outcomes['tool'] == "baseline") & (outcomes['iter'] > 0)]).sort_values(by=['iter'])
     baseline_no_repeats = (outcomes.loc[(outcomes['tool'] == "baseline-no-repeats") & (outcomes['iter'] > 0)]).sort_values(by=['iter'])
+    ziv = (outcomes.loc[(outcomes['tool'] == "ziv") & (outcomes['iter'] > 0)]).sort_values(by=['iter'])
+    ziv_no_repeats = (outcomes.loc[(outcomes['tool'] == "ziv-no-repeats") & (outcomes['iter'] > 0)]).sort_values(by=['iter'])
     
     average = round((1.0 - (rival['number_of_instr_executions'].sum() / rival_no_repeats['number_of_instr_executions'].sum())) * 100, 2)
     print("\\newcommand{\\AveragePercentageOfSkippedInstr}{" + str(average) + "}")
@@ -30,6 +32,9 @@ def plot_repeats_plot(outcomes, args):
 
     rival_evaluates_less_instructions = round((baseline['number_of_instr_executions'].sum() - rival['number_of_instr_executions'].sum()) / baseline['number_of_instr_executions'].sum() * 100, 2)
     print("\\newcommand{\\RivalInstrCountLessThanBaseline}{" + str(rival_evaluates_less_instructions) + "}")
+
+    rival_evaluates_less_instructions_than_ziv = round((ziv['number_of_instr_executions'].sum() - rival['number_of_instr_executions'].sum()) / ziv['number_of_instr_executions'].sum() * 100, 2)
+    print("\\newcommand{\\RivalInstrCountLessThanZiv}{" + str(rival_evaluates_less_instructions_than_ziv) + "}")
 
     percentages = np.array(rival['number_of_instr_executions']) / np.array(rival_no_repeats['number_of_instr_executions']) * 100
     ax.bar(np.arange(len(rival))+1.1, percentages, color="red", alpha=0.7, width=0.5, label='reval')

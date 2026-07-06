@@ -135,14 +135,18 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     if sollya_norm:
         average_over_sollya = round(sollya_cmp['time'].sum() / rival_cmp['time'].sum(), 2)
         average_over_baseline = round(baseline_cmp['time'].sum() / rival_cmp['time'].sum(), 2)
+        average_over_ziv = round(ziv_cmp['time'].sum() / rival_cmp['time'].sum(), 2)
         print("\\newcommand{\\RivalAvgSpeedupOverSollya}{" + str(average_over_sollya) + "\\xspace}")
         print("\\newcommand{\\RivalAvgSpeedupOverBaseline}{" + str(average_over_baseline) + "\\xspace}")
+        print("\\newcommand{\\RivalAvgSpeedupOverZiv}{" + str(average_over_ziv) + "\\xspace}")
         
         max_over_sollya = max([round(i/j, 2) for i, j in zip(np.array(tool_cmp2speed(rival_cmp)[1]), np.array(tool_cmp2speed(sollya_cmp)[1]))])
         max_over_baseline = max([round(i/j, 2) for i, j in zip(np.array(tool_cmp2speed(rival_cmp)[1]), np.array(tool_cmp2speed(baseline_cmp)[1]))])
+        max_over_ziv = max([round(i/j, 2) for i, j in zip(np.array(tool_cmp2speed(rival_cmp)[1]), np.array(tool_cmp2speed(ziv_cmp)[1]))])
         print("\\newcommand{\\RivalMaxSpeedupOverSollya}{" + str(max_over_sollya) + "\\xspace}")
         print("\\newcommand{\\RivalMaxSpeedupOverBaseline}{" + str(max_over_baseline) + "\\xspace}")
-    
+        print("\\newcommand{\\RivalMaxSpeedupOverZiv}{" + str(max_over_ziv) + "\\xspace}")
+        
 def load_outcomes(path):
     outcomes = json.load(open(path, "r"))["outcomes"]
     outcomes = pd.DataFrame(outcomes, columns=['time', 'rival_iter', 'baseline_iter', 'ziv_iter', 'number_of_ops', 'tool_name', 'number_of_points'])
