@@ -9,10 +9,21 @@ use crate::{
     mpfr::mpfr_get_exp,
 };
 use rug::Float;
+use std::cell::Cell;
+
+thread_local! {
+    static SLACK_TRACKING: Cell<bool> = const { Cell::new(false) };
+    static SLACK_USED: Cell<bool> = const { Cell::new(false) };
+}
 
 /// Compute slack for iteration-dependent precision growth
 /// Slack doubles each iteration to push results away from discretization boundaries
 pub fn get_slack(iteration: usize, slack_unit: i64) -> i64 {
+    SLACK_TRACKING.with(|tracking| {
+        if tracking.get() {
+            SLACK_USED.with(|used| used.set(true));
+        }
+    });
     if iteration == 0 || slack_unit <= 0 {
         0
     } else {
@@ -235,4 +246,16 @@ pub fn clamp_to_bits(value: i64) -> u32 {
     } else {
         value as u32
     }
+}
+
+/// Enable tracking whether slack was used during the current tuning operator.
+pub fn begin_slack_tracking() {
+    SLACK_TRACKING.with(|tracking| tracking.set(true));
+    SLACK_USED.with(|used| used.set(false));
+}
+
+/// Disable slack tracking and report whether slack was used at least once.
+pub fn end_slack_tracking() -> bool {
+    SLACK_TRACKING.with(|tracking| tracking.set(false));
+    SLACK_USED.with(|used| used.replace(false))
 }

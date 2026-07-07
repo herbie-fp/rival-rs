@@ -3,13 +3,13 @@
 use crate::eval::{
     instructions::InstructionData,
     machine::{Discretization, Hint, Machine},
-    tricks::{AmplBounds, TrickContext, clamp_to_bits},
+    tricks::{AmplBounds, TrickContext, begin_slack_tracking, clamp_to_bits, end_slack_tracking},
 };
 use itertools::{enumerate, izip};
 
 /// Compute precision targets for instructions based on amplification bounds and hints
 pub(super) fn precision_tuning<D: Discretization>(
-    machine: &Machine<D>,
+    machine: &mut Machine<D>,
     hints: &[Hint],
     repeats: &[bool],
     vprecs_max: &mut [u32],
@@ -26,6 +26,9 @@ pub(super) fn precision_tuning<D: Discretization>(
         if repeats[idx] || matches!(hints[idx], Hint::Skip) {
             continue;
         }
+
+        begin_slack_tracking();
+        machine.tuning_precision_assignments = machine.tuning_precision_assignments.saturating_add(1);
 
         let instruction = &machine.instructions[idx];
         let output = &machine.registers[machine.instruction_register(idx)];
@@ -142,6 +145,10 @@ pub(super) fn precision_tuning<D: Discretization>(
                     vprecs_min,
                 );
             }
+        }
+
+        if end_slack_tracking() {
+            machine.tuning_slack_uses = machine.tuning_slack_uses.saturating_add(1);
         }
     }
     false

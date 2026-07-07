@@ -702,6 +702,15 @@ pub unsafe extern "C" fn rival_machine_bumps(machine: *const RivalMachine) -> u3
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn rival_machine_tuning_slack_fraction(machine: *const RivalMachine) -> f64 {
+    if machine.is_null() {
+        0.0
+    } else {
+        unsafe { (*machine).machine.tuning_slack_fraction() }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_machine_set_profiling(
     machine: *mut RivalMachine,
     mode: RivalProfilingMode,

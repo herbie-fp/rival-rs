@@ -200,6 +200,7 @@
 (define-rival rival_machine_instruction_count (_fun _pointer -> _size))
 (define-rival rival_machine_iterations (_fun _pointer -> _uint32))
 (define-rival rival_machine_bumps (_fun _pointer -> _uint32))
+(define-rival rival_machine_tuning_slack_fraction (_fun _pointer -> _double))
 (define-rival rival_machine_set_profiling (_fun _pointer _rival-profiling-mode -> _void))
 (define-rival rival_machine_get_profiling (_fun _pointer -> _rival-profiling-mode))
 
@@ -622,6 +623,7 @@
     ['instructions (rival_machine_instruction_count (machine-wrapper-ptr machine))]
     ['iterations (rival_machine_iterations (machine-wrapper-ptr machine))]
     ['bumps (rival_machine_bumps (machine-wrapper-ptr machine))]
+    ['tuning-slack-fraction (rival_machine_tuning_slack_fraction (machine-wrapper-ptr machine))]
     ['executions
      (define-values (ptr len) (rival_profiler_executions (machine-wrapper-ptr machine)))
      (cond

@@ -346,6 +346,8 @@ uint32_t rival_machine_iterations(const struct RivalMachine *machine);
 
 uint32_t rival_machine_bumps(const struct RivalMachine *machine);
 
+double rival_machine_tuning_slack_fraction(const struct RivalMachine *machine);
+
 void rival_machine_set_profiling(struct RivalMachine *machine, RivalProfilingMode mode);
 
 RivalProfilingMode rival_machine_get_profiling(const struct RivalMachine *machine);

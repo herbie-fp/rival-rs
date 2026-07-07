@@ -71,6 +71,8 @@ pub struct Machine<D: Discretization> {
     pub(crate) precisions: Vec<u32>,
     pub(crate) repeats: Vec<bool>, // true = skip execution (no change needed)
     pub(crate) output_distance: Vec<bool>, // true = output near discretization boundary
+    pub(crate) tuning_slack_uses: usize,
+    pub(crate) tuning_precision_assignments: usize,
 
     pub(crate) iteration: usize,
     pub(crate) bumps: usize, // Number of times bumps mode has been activated
@@ -258,6 +260,8 @@ impl<D: Discretization> MachineBuilder<D> {
             precisions,
             repeats,
             output_distance,
+            tuning_slack_uses: 0,
+            tuning_precision_assignments: 0,
             iteration: 0,
             bumps: 0,
             max_precision: self.max_precision,
@@ -341,6 +345,28 @@ impl<D: Discretization> Machine<D> {
     #[inline]
     pub fn bumps(&self) -> usize {
         self.bumps
+    }
+
+    /// Return how many tuning-stage precision assignments used slack at least once.
+    #[inline]
+    pub fn tuning_slack_uses(&self) -> usize {
+        self.tuning_slack_uses
+    }
+
+    /// Return how many tuning-stage precision assignments were observed.
+    #[inline]
+    pub fn tuning_precision_assignments(&self) -> usize {
+        self.tuning_precision_assignments
+    }
+
+    /// Return the fraction of tuning-stage precision assignments that used slack.
+    #[inline]
+    pub fn tuning_slack_fraction(&self) -> f64 {
+        if self.tuning_precision_assignments == 0 {
+            0.0
+        } else {
+            self.tuning_slack_uses as f64 / self.tuning_precision_assignments as f64
+        }
     }
 
     /// Enable or disable per-instruction profiling.

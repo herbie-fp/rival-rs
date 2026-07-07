@@ -6,7 +6,7 @@ mod precision;
 use crate::eval::{
     machine::{Discretization, Hint, Machine},
     profile::Execution,
-    tricks::slack_bits,
+    tricks::{begin_slack_tracking, end_slack_tracking, slack_bits},
 };
 use path_reduction::{path_reduction, schedule_child};
 use precision::{precision_tuning, update_repeats};
@@ -84,6 +84,7 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
     let mut work_repeats = vec![true; instruction_count];
     machine.tuning_slack_uses = 0;
     machine.tuning_precision_assignments = 0;
+    begin_slack_tracking();
 
     // Step 1: Add slack bits to outputs that hit discretization boundaries.
     // Slack grows exponentially with iteration to push intervals away from boundaries.
@@ -132,6 +133,7 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
         &mut vprecs_max,
         &mut vprecs_min,
     ) {
+        machine.tuning_slack_uses = end_slack_tracking();
         return true;
     }
 
@@ -154,16 +156,20 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
             &mut vprecs_max,
             &mut vprecs_min,
         ) {
+            machine.tuning_slack_uses = end_slack_tracking();
             return true;
         }
         any_reevaluation =
             update_repeats(machine, &mut work_repeats, &vprecs_max, first_tuning_pass);
         if !any_reevaluation {
+            machine.tuning_slack_uses = end_slack_tracking();
 	    // Machine got stuck
 	    // work_repeats.fill(true);
             return true
         }
     }
+
+    machine.tuning_slack_uses = end_slack_tracking();
 
     // Step 5: Update machine state.
     machine.repeats.copy_from_slice(&work_repeats);

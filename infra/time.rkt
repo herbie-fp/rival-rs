@@ -20,6 +20,8 @@
 (define *baseline-timeout* (make-parameter 0))
 (define *ziv-timeout* (make-parameter 0))
 (define *sollya-timeout* (make-parameter 0))
+(define *slack-tuning-count* (make-parameter 0))
+(define *total-count* (make-parameter 0))
 
 (define (read-from-string s)
   (read (open-input-string s)))
@@ -85,34 +87,34 @@
       (match-define (list pt sollya-exs sollya-status sollya-apply-time) pt*)
 
       ; --------------------------- Baseline execution ----------------------------------------------
-      (define baseline-start-apply (current-inexact-milliseconds))
-      (match-define (list baseline-status baseline-exs)
-        (parameterize ([*rival-max-precision* 32256])
-          (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
-                          [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
-            (define exs (vector-ref (baseline-apply baseline-machine (list->vector (map bf pt))) 1))
-            (list 'valid exs))))
-      (define baseline-apply-time (- (current-inexact-milliseconds) baseline-start-apply))
-      (define baseline-executions (rival-profile baseline-machine 'executions))
-      (define baseline-iteration (rival-profile baseline-machine 'iterations))
-      (define baseline-precision
-        (if (zero? (vector-length baseline-executions))
-            0
-            (apply max (vector->list (vector-map execution-precision baseline-executions)))))
+      ;; (define baseline-start-apply (current-inexact-milliseconds))
+      ;; (match-define (list baseline-status baseline-exs)
+      ;;   (parameterize ([*rival-max-precision* 32256])
+      ;;     (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
+      ;;                     [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
+      ;;       (define exs (vector-ref (baseline-apply baseline-machine (list->vector (map bf pt))) 1))
+      ;;       (list 'valid exs))))
+      ;; (define baseline-apply-time (- (current-inexact-milliseconds) baseline-start-apply))
+      ;; (define baseline-executions (rival-profile baseline-machine 'executions))
+      ;; (define baseline-iteration (rival-profile baseline-machine 'iterations))
+      ;; (define baseline-precision
+      ;;   (if (zero? (vector-length baseline-executions))
+      ;;       0
+      ;;       (apply max (vector->list (vector-map execution-precision baseline-executions)))))
 
       ; --------------------------- Ziv execution ---------------------------------------------------
-      (define ziv-start-apply (current-inexact-milliseconds))
-      (match-define (list ziv-status ziv-exs)
-        (parameterize ([*rival-max-precision* 32256])
-          (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
-                          [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
-            (define exs (vector-ref (ziv-apply ziv-machine (list->vector (map bf pt))) 1))
-            (list 'valid exs))))
-      (define ziv-apply-time (- (current-inexact-milliseconds) ziv-start-apply))
-      (define ziv-executions (rival-profile ziv-machine 'executions))
-      (define ziv-iteration (rival-profile ziv-machine 'iterations))
+      ;; (define ziv-start-apply (current-inexact-milliseconds))
+      ;; (match-define (list ziv-status ziv-exs)
+      ;;   (parameterize ([*rival-max-precision* 32256])
+      ;;     (with-handlers ([exn:rival:invalid? (λ (e) (list 'invalid #f))]
+      ;;                     [exn:rival:unsamplable? (λ (e) (list 'unsamplable #f))])
+      ;;       (define exs (vector-ref (ziv-apply ziv-machine (list->vector (map bf pt))) 1))
+      ;;       (list 'valid exs))))
+      ;; (define ziv-apply-time (- (current-inexact-milliseconds) ziv-start-apply))
+      ;; (define ziv-executions (rival-profile ziv-machine 'executions))
+      ;; (define ziv-iteration (rival-profile ziv-machine 'iterations))
       
-      ; --------------------------- Rival execution -------------------------------------------------
+      ;; -------------------------- Rival execution -------------------------------------------------
       (define rival-start-apply (current-inexact-milliseconds))
       (match-define (list rival-status rival-exs)
         (parameterize ([*rival-max-precision* 32256])
@@ -124,228 +126,238 @@
       (define rival-iter (rival-profile rival-machine 'iterations))
       (define rival-executions (rival-profile rival-machine 'executions))
       
-      ; --------------------------- Sollya execution ------------------------------------------------
-      (when (and sollya-machine (not (equal? rival-status 'invalid)))
-        (match sollya-reeval
-          [#t
-           (set! sollya-apply-time 0.0)
-           (match sollya-machine
-             [#f (list #f #f)] ; if sollya machine is not working for this benchmark
-             [else
-              (with-handlers ([exn:fail? (λ (e)
-                                           (printf "Sollya failed")
-                                           (printf "~a\n" e)
-                                           (sollya-kill sollya-machine)
-                                           (set! sollya-machine #f)
-                                           (list #f #f))])
-                (match-define (list internal-time external-time exs status)
-                  (sollya-apply sollya-machine pt #:timeout (*sampling-timeout*)))
-                (set! sollya-apply-time external-time)
-                (set! sollya-status status)
-                (set! sollya-exs exs))])]
-          [#f
-           (set! sollya-exs
-                 (match sollya-exs
-                   ["#f" #f]
-                   [#f #f]
-                   [_ (fl (string->number sollya-exs))]))
+      (when (equal? rival-status 'valid)
+        (*slack-tuning-count* (+ (rival-profile rival-machine 'tuning-slack-fraction) (*slack-tuning-count*)))
+        (*total-count* (add1 (*total-count*)))
 
-           (set! sollya-status
-                 (match sollya-status
-                   ["#f" 'invalid]
-                   [#f 'invalid]
-                   [_ (string->symbol sollya-status)]))
+        (when (not (equal? 0 (rival-profile rival-machine 'bumps)))
+          (println "BUMPS HELPED")))
+      
+      ;; ; --------------------------- Sollya execution ------------------------------------------------
+      ;; (when (and sollya-machine (not (equal? rival-status 'invalid)))
+      ;;   (match sollya-reeval
+      ;;     [#t
+      ;;      (set! sollya-apply-time 0.0)
+      ;;      (match sollya-machine
+      ;;        [#f (list #f #f)] ; if sollya machine is not working for this benchmark
+      ;;        [else
+      ;;         (with-handlers ([exn:fail? (λ (e)
+      ;;                                      (printf "Sollya failed")
+      ;;                                      (printf "~a\n" e)
+      ;;                                      (sollya-kill sollya-machine)
+      ;;                                      (set! sollya-machine #f)
+      ;;                                      (list #f #f))])
+      ;;           (match-define (list internal-time external-time exs status)
+      ;;             (sollya-apply sollya-machine pt #:timeout (*sampling-timeout*)))
+      ;;           (set! sollya-apply-time external-time)
+      ;;           (set! sollya-status status)
+      ;;           (set! sollya-exs exs))])]
+      ;;     [#f
+      ;;      (set! sollya-exs
+      ;;            (match sollya-exs
+      ;;              ["#f" #f]
+      ;;              [#f #f]
+      ;;              [_ (fl (string->number sollya-exs))]))
 
-           (set! sollya-apply-time
-                 (match sollya-apply-time
-                   ["#f" 0.0]
-                   [#f 0.0]
-                   [_ sollya-apply-time]))])
+      ;;      (set! sollya-status
+      ;;            (match sollya-status
+      ;;              ["#f" 'invalid]
+      ;;              [#f 'invalid]
+      ;;              [_ (string->symbol sollya-status)]))
+
+      ;;      (set! sollya-apply-time
+      ;;            (match sollya-apply-time
+      ;;              ["#f" 0.0]
+      ;;              [#f 0.0]
+      ;;             [_ sollya-apply-time]))])
         
         ; -------------------------------- Combining results ----------------------------------------
-        (when (and (> baseline-iteration 0) (not tuned-bench))
-          (set! tuned-bench #t)
-          (*num-tuned-benchmarks* (add1 (*num-tuned-benchmarks*))))
+        ;; (when (and (> baseline-iteration 0) (not tuned-bench))
+        ;;   (set! tuned-bench #t)
+        ;;   (*num-tuned-benchmarks* (add1 (*num-tuned-benchmarks*))))
 
-        (define (executions->max-precisions executions)
-          (define max-precisions (make-hash))
-          (for ([exec (in-vector executions)]
-                #:when (>= (execution-number exec) 0))
-            (define i (execution-number exec))
-            (define precision (execution-precision exec))
-            (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
-          max-precisions)
+        ;; (define (executions->max-precisions executions)
+        ;;   (define max-precisions (make-hash))
+        ;;   (for ([exec (in-vector executions)]
+        ;;         #:when (>= (execution-number exec) 0))
+        ;;     (define i (execution-number exec))
+        ;;     (define precision (execution-precision exec))
+        ;;     (hash-set! max-precisions i (max precision (hash-ref max-precisions i 0))))
+        ;;   max-precisions)
         
-        ; Store histograms data
-        (when (> baseline-iteration 0)
-          ;; Rival
-          (for ([execution (in-vector rival-executions)])
-            (define name (execution-name execution))
-            (define precision (execution-precision execution))
-            (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
-              (timeline-push! timeline
-                              'mixsample-rival-valid
-                              (list (execution-time execution) name precision)))
-            (timeline-push! timeline
-                            'mixsample-rival-all
-                            (list (execution-time execution) name precision)))
+        ;; ; Store histograms data
+        ;; (when (> baseline-iteration 0)
+        ;;   ;; Rival
+        ;;   (for ([execution (in-vector rival-executions)])
+        ;;     (define name (execution-name execution))
+        ;;     (define precision (execution-precision execution))
+        ;;     (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
+        ;;       (timeline-push! timeline
+        ;;                       'mixsample-rival-valid
+        ;;                       (list (execution-time execution) name precision)))
+        ;;     (timeline-push! timeline
+        ;;                     'mixsample-rival-all
+        ;;                     (list (execution-time execution) name precision)))
           
-          ;; Baseline
-          (for ([execution (in-vector baseline-executions)])
-            (define name (execution-name execution))
-            (define precision (execution-precision execution))
-            (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
-              (timeline-push! timeline
-                              'mixsample-baseline-valid
-                              (list (execution-time execution) name precision)))
-            (timeline-push! timeline
-                            'mixsample-baseline-all
-                            (list (execution-time execution) name precision)))
+        ;;   ;; Baseline
+        ;;   (for ([execution (in-vector baseline-executions)])
+        ;;     (define name (execution-name execution))
+        ;;     (define precision (execution-precision execution))
+        ;;     (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
+        ;;       (timeline-push! timeline
+        ;;                       'mixsample-baseline-valid
+        ;;                       (list (execution-time execution) name precision)))
+        ;;     (timeline-push! timeline
+        ;;                     'mixsample-baseline-all
+        ;;                     (list (execution-time execution) name precision)))
 
-          ;; Ziv
-          (for ([execution (in-vector ziv-executions)])
-            (define name (execution-name execution))
-            (define precision (execution-precision execution))
-            (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid))
-              (timeline-push! timeline
-                              'mixsample-ziv-valid
-                              (list (execution-time execution) name precision)))
-            (timeline-push! timeline
-                            'mixsample-ziv-all
-                            (list (execution-time execution) name precision))))
+        ;;   ;; Ziv
+        ;;   (for ([execution (in-vector ziv-executions)])
+        ;;     (define name (execution-name execution))
+        ;;     (define precision (execution-precision execution))
+        ;;     (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid))
+        ;;       (timeline-push! timeline
+        ;;                       'mixsample-ziv-valid
+        ;;                       (list (execution-time execution) name precision)))
+        ;;     (timeline-push! timeline
+        ;;                     'mixsample-ziv-all
+        ;;                     (list (execution-time execution) name precision))))
 
-        (define (push-normalized-density! tool precisions max-prec)
-          (for ([precision (in-list precisions)])
-            (timeline-push! timeline 'density (list tool (~a (exact->inexact (/ precision max-prec)) #:width 5)))))
+        ;; (define (push-normalized-density! tool precisions max-prec)
+        ;;   (for ([precision (in-list precisions)])
+        ;;     (timeline-push! timeline 'density (list tool (~a (exact->inexact (/ precision max-prec)) #:width 5)))))
         
-        ; Density plot data
-        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid) (> baseline-iteration 0))
-          (unless optimal-precision-list
-            (set! optimal-precision-list
-                  (vector->list
-                   (parameterize ([*rival-max-precision* 32256])
-                     (rival-machine-find-optimal-precisions rival-machine (list->vector (map bf pt)))))))
-          (define rival-max-precisions (executions->max-precisions rival-executions))
-          (define baseline-max-precisions (executions->max-precisions baseline-executions))
-          (define ziv-max-precisions (executions->max-precisions ziv-executions))
-          (define optimal-precision-list*
-            (for/list ([precision (in-list optimal-precision-list)])
-              (max minimal-precision precision)))
+        ;; ; Density plot data
+        ;; (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid) (equal? ziv-status 'valid) (> baseline-iteration 0))
+        ;;   (unless optimal-precision-list
+        ;;     (set! optimal-precision-list
+        ;;           (vector->list
+        ;;            (parameterize ([*rival-max-precision* 32256])
+        ;;              (rival-machine-find-optimal-precisions rival-machine (list->vector (map bf pt)))))))
+        ;;   (define rival-max-precisions (executions->max-precisions rival-executions))
+        ;;   (define baseline-max-precisions (executions->max-precisions baseline-executions))
+        ;;   (define ziv-max-precisions (executions->max-precisions ziv-executions))
+        ;;   (define optimal-precision-list*
+        ;;     (for/list ([precision (in-list optimal-precision-list)])
+        ;;       (max minimal-precision precision)))
 
-          ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
-          (define rival-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
-          (for ([(i precision)
-                 (in-hash rival-max-precisions)]) (vector-set! rival-precisions-vector i (max minimal-precision precision)))
+        ;;   ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
+        ;;   (define rival-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
+        ;;   (for ([(i precision)
+        ;;          (in-hash rival-max-precisions)]) (vector-set! rival-precisions-vector i (max minimal-precision precision)))
           
-          (define baseline-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
-          (for ([(i precision) (in-hash baseline-max-precisions)])
-            (vector-set! baseline-precisions-vector i (max minimal-precision precision)))
+        ;;   (define baseline-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
+        ;;   (for ([(i precision) (in-hash baseline-max-precisions)])
+        ;;     (vector-set! baseline-precisions-vector i (max minimal-precision precision)))
 
-          (define ziv-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
-          (for ([(i precision) (in-hash ziv-max-precisions)])
-            (vector-set! ziv-precisions-vector i (max minimal-precision precision)))
+        ;;   (define ziv-precisions-vector (vector-copy (list->vector optimal-precision-list*)))
+        ;;   (for ([(i precision) (in-hash ziv-max-precisions)])
+        ;;     (vector-set! ziv-precisions-vector i (max minimal-precision precision)))
           
-          (define rival-precision-list (vector->list rival-precisions-vector))
-          (define baseline-precision-list (vector->list baseline-precisions-vector))
-          (define ziv-precision-list (vector->list ziv-precisions-vector))
-          (define max-prec (apply max (append rival-precision-list baseline-precision-list ziv-precision-list optimal-precision-list*)))
-          (push-normalized-density! 'rival rival-precision-list max-prec)
-          (push-normalized-density! 'baseline baseline-precision-list max-prec)
-          (push-normalized-density! 'ziv ziv-precision-list max-prec)
-          (push-normalized-density! 'optimal optimal-precision-list* max-prec))
+        ;;   (define rival-precision-list (vector->list rival-precisions-vector))
+        ;;   (define baseline-precision-list (vector->list baseline-precisions-vector))
+        ;;   (define ziv-precision-list (vector->list ziv-precisions-vector))
+        ;;   (define max-prec (apply max (append rival-precision-list baseline-precision-list ziv-precision-list optimal-precision-list*)))
+        ;;   (push-normalized-density! 'rival rival-precision-list max-prec)
+        ;;   (push-normalized-density! 'baseline baseline-precision-list max-prec)
+        ;;   (push-normalized-density! 'ziv ziv-precision-list max-prec)
+        ;;   (push-normalized-density! 'optimal optimal-precision-list* max-prec))
 
-        ; Close-to-optimal graph
-        (when (and (equal? rival-status 'valid)
-                   (equal? baseline-status 'valid)
-                   (> baseline-iteration 0))
-          (unless optimal-precision-list
-            (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
-          (define optimal-precisions (list->vector optimal-precision-list))
-          (define rival-max-precisions (executions->max-precisions rival-executions))
-          (define baseline-max-precisions (executions->max-precisions baseline-executions))
-          (define ziv-max-precisions (executions->max-precisions ziv-executions))
+        ;; ; Close-to-optimal graph
+        ;; (when (and (equal? rival-status 'valid)
+        ;;            (equal? baseline-status 'valid)
+        ;;            (> baseline-iteration 0))
+        ;;   (unless optimal-precision-list
+        ;;     (error 'optimal-preicison-list "Optimal precision cache does not have a record for a valid point: ~a. Likely, points.json was changed" pt*))
+        ;;   (define optimal-precisions (list->vector optimal-precision-list))
+        ;;   (define rival-max-precisions (executions->max-precisions rival-executions))
+        ;;   (define baseline-max-precisions (executions->max-precisions baseline-executions))
+        ;;   (define ziv-max-precisions (executions->max-precisions ziv-executions))
 
-          ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
-          (for ([optimal-precision (in-vector optimal-precisions)]
-                [i (in-naturals)])
-            (define rival-precision (max minimal-precision (hash-ref rival-max-precisions i optimal-precision)))
-            (define baseline-precision (max minimal-precision (hash-ref baseline-max-precisions i optimal-precision)))
-            (define ziv-precision (max minimal-precision (hash-ref ziv-max-precisions i optimal-precision)))
-            (timeline-push! timeline
-                            'optimality
-                            (list baseline-iteration
-                                  (max minimal-precision optimal-precision)
-                                  rival-precision
-                                  ziv-precision
-                                  baseline-precision))))
+        ;;   ; In case of constant folding - just assume that the precision was optimal (that way it less contributes to the plot)
+        ;;   (for ([optimal-precision (in-vector optimal-precisions)]
+        ;;         [i (in-naturals)])
+        ;;     (define rival-precision (max minimal-precision (hash-ref rival-max-precisions i optimal-precision)))
+        ;;     (define baseline-precision (max minimal-precision (hash-ref baseline-max-precisions i optimal-precision)))
+        ;;     (define ziv-precision (max minimal-precision (hash-ref ziv-max-precisions i optimal-precision)))
+        ;;     (timeline-push! timeline
+        ;;                     'optimality
+        ;;                     (list baseline-iteration
+        ;;                           (max minimal-precision optimal-precision)
+        ;;                           rival-precision
+        ;;                           ziv-precision
+        ;;                           baseline-precision))))
         
-        ; Percentage of instructions has been executed graph
-        (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
-          ;; Rival
-          (for ([execution (in-vector rival-executions)])
-            (timeline-push! timeline
-                            'instr-executed-cnt
-                            (list 'rival (execution-iteration execution) 1)))
-          (define rival-ivec-len (rival-profile rival-machine 'instructions))
-          (for ([n (in-range (add1 rival-iter))])
-            (timeline-push! timeline 'instr-executed-cnt (list 'rival-no-repeats n rival-ivec-len)))
+        ;; ; Percentage of instructions has been executed graph
+        ;; (when (and (equal? rival-status 'valid) (equal? baseline-status 'valid))
+        ;;   ;; Rival
+        ;;   (for ([execution (in-vector rival-executions)])
+        ;;     (timeline-push! timeline
+        ;;                     'instr-executed-cnt
+        ;;                     (list 'rival (execution-iteration execution) 1)))
+        ;;   (define rival-ivec-len (rival-profile rival-machine 'instructions))
+        ;;   (for ([n (in-range (add1 rival-iter))])
+        ;;     (timeline-push! timeline 'instr-executed-cnt (list 'rival-no-repeats n rival-ivec-len)))
           
-          ;; Baseline
-          (for ([execution (in-vector baseline-executions)])
-            (timeline-push! timeline
-                            'instr-executed-cnt
-                            (list 'baseline (execution-iteration execution) 1)))
-          (define baseline-ivec-len (rival-profile baseline-machine 'instructions))
-          (for ([n (in-range (add1 baseline-iteration))])
-            (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n baseline-ivec-len)))
+        ;;   ;; Baseline
+        ;;   (for ([execution (in-vector baseline-executions)])
+        ;;     (timeline-push! timeline
+        ;;                     'instr-executed-cnt
+        ;;                     (list 'baseline (execution-iteration execution) 1)))
+        ;;   (define baseline-ivec-len (rival-profile baseline-machine 'instructions))
+        ;;   (for ([n (in-range (add1 baseline-iteration))])
+        ;;     (timeline-push! timeline 'instr-executed-cnt (list 'baseline-no-repeats n baseline-ivec-len)))
 
-          ;; Ziv
-          (for ([execution (in-vector ziv-executions)])
-            (timeline-push! timeline
-                            'instr-executed-cnt
-                            (list 'ziv (execution-iteration execution) 1)))
-          (define ziv-ivec-len (rival-profile ziv-machine 'instructions))
-          (for ([n (in-range (add1 ziv-iteration))])
-            (timeline-push! timeline 'instr-executed-cnt (list 'ziv-no-repeats n ziv-ivec-len))))
+        ;;   ;; Ziv
+        ;;   (for ([execution (in-vector ziv-executions)])
+        ;;     (timeline-push! timeline
+        ;;                     'instr-executed-cnt
+        ;;                     (list 'ziv (execution-iteration execution) 1)))
+        ;;   (define ziv-ivec-len (rival-profile ziv-machine 'instructions))
+        ;;   (for ([n (in-range (add1 ziv-iteration))])
+        ;;     (timeline-push! timeline 'instr-executed-cnt (list 'ziv-no-repeats n ziv-ivec-len))))
 
-        ; Speed graph and number of points graph
-        (when (> (*sampling-timeout*) sollya-apply-time)
-          (point-bucketing timeline
-                           rival-status
-                           rival-apply-time
-                           rival-exs
-                           baseline-status
-                           baseline-apply-time
-                           baseline-exs
-                           ziv-status
-                           ziv-apply-time
-                           ziv-exs
-                           sollya-status
-                           sollya-apply-time
-                           sollya-exs
-                           baseline-iteration
-                           ziv-iteration
-                           rival-iter
-                           number-of-ops))
+        ;; ; Speed graph and number of points graph
+        ;; (when (> (*sampling-timeout*) sollya-apply-time)
+        ;;   (point-bucketing timeline
+        ;;                    rival-status
+        ;;                    rival-apply-time
+        ;;                    rival-exs
+        ;;                    baseline-status
+        ;;                    baseline-apply-time
+        ;;                    baseline-exs
+        ;;                    ziv-status
+        ;;                    ziv-apply-time
+        ;;                    ziv-exs
+        ;;                    sollya-status
+        ;;                    sollya-apply-time
+        ;;                    sollya-exs
+        ;;                    baseline-iteration
+        ;;                    ziv-iteration
+        ;;                    rival-iter
+        ;;                    number-of-ops))
 
-        ; Timeouts measuring
-        (when (<= (*sampling-timeout*) sollya-apply-time)
-          (*sollya-timeout* (add1 (*sollya-timeout*))))
-        (when (<= (*sampling-timeout*) rival-apply-time)
-          (*rival-timeout* (add1 (*rival-timeout*))))
-        (when (<= (*sampling-timeout*) baseline-apply-time)
-          (*baseline-timeout* (add1 (*baseline-timeout*))))
-        (when (<= (*sampling-timeout*) ziv-apply-time)
-          (*ziv-timeout* (add1 (*ziv-timeout*)))))
+        ;; ; Timeouts measuring
+        ;; (when (<= (*sampling-timeout*) sollya-apply-time)
+        ;;   (*sollya-timeout* (add1 (*sollya-timeout*))))
+        ;; (when (<= (*sampling-timeout*) rival-apply-time)
+        ;;   (*rival-timeout* (add1 (*rival-timeout*))))
+        ;; (when (<= (*sampling-timeout*) baseline-apply-time)
+        ;;   (*baseline-timeout* (add1 (*baseline-timeout*))))
+        ;; (when (<= (*sampling-timeout*) ziv-apply-time)
+        ;;   (*ziv-timeout* (add1 (*ziv-timeout*)))))
       
       ; Count differences
-      (define rival-baseline-difference
-        (if (or (not (equal? rival-status baseline-status)) (not (equal? rival-status ziv-status))) 1 0))
-      (cons rival-status (cons rival-apply-time rival-baseline-difference))))
+      ;; (define rival-baseline-difference
+      ;;   (if (or (not (equal?
+      ;;                rival-status baseline-status)) (not (equal? rival-status ziv-status))) 1 0))
+      (cons rival-status (cons rival-apply-time 0))))
+
+  (println (/ (*slack-tuning-count*) (*total-count*)))
   
   ; Zombie process
-  (when sollya-machine
-    (sollya-kill sollya-machine))
+;; (when sollya-machine
+;;    (sollya-kill sollya-machine))
 
   (cons (cons 'compile compile-time) times))
 
