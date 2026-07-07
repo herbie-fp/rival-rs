@@ -12,10 +12,22 @@ def load_mixsample(path, tool, valid):
     outcomes = pd.DataFrame(outcomes, columns=['time', 'op', 'precision'])
     return outcomes
 
+def total_time_seconds(data):
+    return round(pd.to_numeric(data["time"], errors="coerce").fillna(0).sum() / 1000, 2)
+
+def print_total_time_macro(tool, valid, data):
+    tool_name = {"rival": "Rival", "baseline": "Baseline", "ziv": "Ziv"}[tool]
+    scope = "Valid" if valid else "All"
+    print("\\newcommand{\\" + tool_name + scope + "EvaluationTime}{" + str(total_time_seconds(data)) + "\\xspace}")
+
 def plot_histogram_valid(args):
     baseline = load_mixsample(args.timeline, "baseline", True)
     rival = load_mixsample(args.timeline, "rival", True)
     ziv = load_mixsample(args.timeline, "ziv", True)
+
+    print_total_time_macro("rival", True, rival)
+    print_total_time_macro("baseline", True, baseline)
+    print_total_time_macro("ziv", True, ziv)
 
     adjust_time_baseline = round(baseline[baseline["op"] == 'adjust']['time'].sum()/1000, 2)
     baseline = baseline[baseline["op"] != 'adjust']
@@ -81,6 +93,10 @@ def plot_histogram_all(args):
     baseline = load_mixsample(args.timeline, "baseline", False)
     rival = load_mixsample(args.timeline, "rival", False)
     ziv = load_mixsample(args.timeline, "ziv", False)
+
+    print_total_time_macro("rival", False, rival)
+    print_total_time_macro("baseline", False, baseline)
+    print_total_time_macro("ziv", False, ziv)
 
     adjust_time_baseline = round(baseline[baseline["op"] == 'adjust']['time'].sum()/1000, 2)
     baseline = baseline[baseline["op"] != 'adjust']
