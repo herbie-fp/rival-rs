@@ -25,6 +25,14 @@ def bucket_density(outcomes):
     outcomes2 = outcomes2.groupby(by=['tool', 'precision'], as_index=False, sort=True).sum()
     return outcomes1, outcomes2
 
+def lower_precision_percentage(outcomes, tool, threshold=0.2):
+    tool_outcomes = outcomes[outcomes["tool"] == tool]
+    total = tool_outcomes["count"].sum()
+    if total == 0:
+        return 0.0
+    lower = tool_outcomes.loc[tool_outcomes["precision"] < threshold, "count"].sum()
+    return round(lower / total * 100, 2)
+
 def plot_density(rival, args):
     fig, ax = plt.subplots(figsize=(4, 3))
 
@@ -91,7 +99,12 @@ def plot_density_plots(args):
     outcomes1, outcomes2 = bucket_density(outcomes)
     rival = outcomes2[outcomes2["tool"] == "rival"]
 
-    print("\\newcommand{\\DensityPercentageOfLowerPrecision}{" + str(round(rival["count"][:4].sum() / rival["count"].sum() * 100, 2)) + "}")
+    print("\\newcommand{\\DensityPercentageOfLowerPrecisionReval}{" + str(lower_precision_percentage(outcomes1, "rival")) + "}")
+    print("\\newcommand{\\DensityPercentageOfLowerPrecisionBaseline}{" + str(lower_precision_percentage(outcomes1, "baseline")) + "}")
+    print("\\newcommand{\\DensityPercentageOfLowerPrecisionZiv}{" + str(lower_precision_percentage(outcomes1, "ziv")) + "}")
+    print("\\newcommand{\\DensityPercentageOfLowerPrecisionOptimal}{" + str(lower_precision_percentage(outcomes1, "optimal")) + "}")
+    print("\\newcommand{\\DensityAdvantageRevalOverBaseline}{" + str(round(lower_precision_percentage(outcomes1, "rival") / lower_precision_percentage(outcomes1, "baseline"), 2)) + "}")
+    print("\\newcommand{\\DensityAdvantageRevalOverZiv}{" + str(round(lower_precision_percentage(outcomes1, "rival") / lower_precision_percentage(outcomes1, "ziv"), 2)) + "}")
 
     plot_density(rival, args)
     plot_density_cdf(outcomes1, args)

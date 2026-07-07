@@ -61,6 +61,16 @@ def plot_optimality(outcomes, args):
     
     ax.plot(x + 1, outcomes["optimal_precision"], ".-", linewidth=2.0, color="orange", label="optimal")
 
+    reval_gap = (outcomes["rival_precision"] - outcomes["optimal_precision"]).abs().mean()
+    baseline_gap = (outcomes["baseline_precision"] - outcomes["optimal_precision"]).abs().mean()
+    ziv_gap = (outcomes["ziv_precision"] - outcomes["optimal_precision"]).abs().mean()
+
+    baseline_factor = round(baseline_gap / reval_gap, 2)
+    ziv_factor = round(ziv_gap / reval_gap, 2)
+
+    print("\\newcommand{\\RevalCloserToOptimalThanZiv}{" + str(ziv_factor) + "}")
+    print("\\newcommand{\\RevalCloserToOptimalThanBaseline}{" + str(baseline_factor) + "}")
+    
     ax.legend()
     ax.set_xlabel("True uniform precision")
     ax.set_ylabel("Avg. precision")
