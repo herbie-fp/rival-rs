@@ -24,7 +24,7 @@ def plot_repeats_plot(outcomes, args):
     print("\\newcommand{\\MaximumPercentageOfSkippedInstr}{" + str(maximum) + "}")
 
     baseline_percentages = np.array(baseline['number_of_instr_executions']) / np.array(baseline_no_repeats['number_of_instr_executions']) * 100
-    ax.bar(np.arange(len(baseline)) + 0.9, baseline_percentages, color="green", alpha=1, width=0.5, label='baseline', hatch='/')
+    ax.bar(np.arange(len(baseline)) + 0.9, baseline_percentages, color="green", alpha=1, width=0.5, label='ziv+', hatch='/')
     average_baseline = round((1.0 - (baseline['number_of_instr_executions'].sum() / baseline_no_repeats['number_of_instr_executions'].sum())) * 100, 2)
     print("\\newcommand{\\AveragePercentageOfSkippedInstrBaseline}{" + str(average_baseline) + "}")
 

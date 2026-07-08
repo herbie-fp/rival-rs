@@ -10,7 +10,7 @@ def plot_points_graph(outcomes):
     series_labels = ['zero', 'non-zero']
     colors = ['tab:blue',  'tab:orange', 'tab:green']
 
-    category_labels = ['Reval', 'Sollya', 'Baseline']
+    category_labels = ['Reval', 'Sollya', 'ziv+']
 
     data = np.zeros((len(series_labels), len(category_labels)))
 

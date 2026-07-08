@@ -52,7 +52,7 @@ def plot_density_cdf(outcomes, args):
     styles = {
         "optimal": ("orange", "-", "optimal"),
         "rival": ("red", "-.", "rival"),
-        "baseline": ("green", "--", "baseline"),
+        "baseline": ("green", "--", "ziv+"),
         "ziv": ("dimgrey", ":", "ziv"),
     }
     for tool in ["optimal", "rival", "baseline", "ziv"]:

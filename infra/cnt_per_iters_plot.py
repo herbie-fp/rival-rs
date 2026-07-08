@@ -26,7 +26,7 @@ def plot_cnt_per_iters(outcomes, args):
     
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
     ax.bar(np.arange(len(ziv)) + 0.825, ziv['number_of_points'], color="darkgrey", alpha=1, width=0.4, label='ziv', hatch='\\')
-    ax.bar(np.arange(len(baseline)) + 1.0, baseline['number_of_points'], color="green", alpha=1, width=0.4, label='baseline', hatch='/')
+    ax.bar(np.arange(len(baseline)) + 1.0, baseline['number_of_points'], color="green", alpha=1, width=0.4, label='ziv+', hatch='/')
     ax.bar(np.arange(len(rival)) + 1.175, rival['number_of_points'], color="red", alpha=1, width=0.4, label='reval')
    
     def convergence_at(data, n):

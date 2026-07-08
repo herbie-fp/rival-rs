@@ -34,7 +34,7 @@ def plot_speed_graph_rival_iter(outcomes, args):
     ax.plot(tool_cmp2speed(ziv_cmp)[0], np.array(tool_cmp2speed(ziv_cmp)[1])/base, '-', marker='s', linewidth=2.5, color='dimgrey',
             label='ziv')
     ax.plot(tool_cmp2speed(baseline_cmp)[0], np.array(tool_cmp2speed(baseline_cmp)[1])/base, '-', linewidth=2.0, color='g',
-            label='baseline')
+            label='ziv+')
     # Plot Sollya
     ax.plot(tool_cmp2speed(sollya_cmp)[0], np.array(tool_cmp2speed(sollya_cmp)[1])/base, ':', marker='>', linewidth=2.0, color='b',
             label='sollya')
@@ -103,7 +103,7 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     ax.plot(tool_cmp2speed(ziv_cmp)[0], np.array(tool_cmp2speed(ziv_cmp)[1])/base, '-', marker='s', linewidth=2.5, color='dimgrey',
             label='ziv')
     ax.plot(tool_cmp2speed(baseline_cmp)[0], np.array(tool_cmp2speed(baseline_cmp)[1])/base, '-', linewidth=2.0, color='g',
-            label='baseline')
+            label='ziv+')
     # Plot Sollya
     ax.plot(tool_cmp2speed(sollya_cmp)[0], np.array(tool_cmp2speed(sollya_cmp)[1])/base, ':', marker='>', linewidth=2.0, color='b',
             label='sollya')
@@ -127,7 +127,7 @@ def plot_speed_graph_baseline_precision(outcomes, args, sollya_norm=False):
     else:
         plt.savefig(args.path + "/ratio_plot_precision_base_norm.pdf", format="pdf")
         
-        ax.set_title("Speed ratio plot per precision, Baseline normalized")
+        ax.set_title("Speed ratio plot per precision, ziv+ normalized")
         plt.tight_layout()
         plt.savefig(args.path + "/ratio_plot_precision_base_norm.png", format="png")
       

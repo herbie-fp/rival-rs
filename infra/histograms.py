@@ -53,7 +53,7 @@ def plot_histogram_valid(args):
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
     
     ax.bar(np.arange(len(bins)) + 0.3, buckets_ziv, color="darkgrey", alpha=1, width=0.45, label='ziv', hatch='\\')
-    ax.bar(np.arange(len(bins)) + 0.5, buckets_base, color="green", alpha=1, width=0.45, label='baseline', hatch='/')
+    ax.bar(np.arange(len(bins)) + 0.5, buckets_base, color="green", alpha=1, width=0.45, label='ziv+', hatch='/')
     ax.bar(np.arange(len(bins)) + 0.7, buckets_rival, color="red", alpha=1, width=0.45, label='reval')
     
     # ax.bar(np.arange(len(bins)) + 0.3, buckets_base, color="green", alpha=1, width=0.25, label='baseline', hatch='/')
@@ -118,7 +118,7 @@ def plot_histogram_all(args):
     ax.yaxis.grid(True, linestyle='-', which='major', color='grey', alpha=0.3)
     
     ax.bar(np.arange(len(bins)) + 0.3, buckets_ziv, color="darkgrey", alpha=1, width=0.45, label='ziv', hatch='\\')
-    ax.bar(np.arange(len(bins)) + 0.5, buckets_base, color="green", alpha=1, width=0.45, label='baseline', hatch='/')
+    ax.bar(np.arange(len(bins)) + 0.5, buckets_base, color="green", alpha=1, width=0.45, label='ziv+', hatch='/')
     ax.bar(np.arange(len(bins)) + 0.7, buckets_rival, color="red", alpha=1, width=0.45, label='reval')
     
     # ax.bar(np.arange(len(bins)) + 0.3, buckets_base, color="green", alpha=1, width=0.25, label='baseline', hatch='/')
