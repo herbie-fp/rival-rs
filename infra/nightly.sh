@@ -16,7 +16,7 @@ rustup update
 make install
 xz -d -k -f infra/points.json.xz
 xz -d -k -f infra/optimal_precisions.json.xz
-racket -y infra/time.rkt --dir "$REPORTDIR" --profile profile.json --optimal-precisions infra/optimal_precisions.json infra/points.json
+racket -y infra/time.rkt --dir "$REPORTDIR" --profile profile.json --optimal-precisions infra/optimal_precisions.json --sollya-reeval infra/points.json
 python3 infra/ratio_plot.py -t "$REPORTDIR"/timeline.json -o "$REPORTDIR"
 python3 infra/point_graph.py -t "$REPORTDIR"/timeline.json -o "$REPORTDIR"
 python3 infra/histograms.py -t "$REPORTDIR"/timeline.json -o "$REPORTDIR"
