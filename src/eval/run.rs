@@ -24,23 +24,24 @@ impl<D: Discretization> Machine<D> {
     ///
     /// `max_iterations` sets the maximum number of re-evaluation
     /// iterations before giving up.
+    /// If `require_all_outputs` is true, any totally invalid output makes
+    /// the whole call invalid; otherwise, only an all-invalid output vector does.
     ///
     /// # Errors
     ///
-    /// Returns [`RivalError::InvalidInput`] if the point is an
-    /// invalid input to at least one of the compiled expressions.
+    /// Returns [`RivalError::InvalidInput`] according to the selected
+    /// `require_all_outputs` policy.
     /// Returns [`RivalError::Unsamplable`] if Rival is unable to
     /// evaluate at least one expression.
     ///
-    /// Note that `apply` will only return `Ok` if it can prove
-    /// that it has correctly-rounded the output. It will only
-    /// return `InvalidInput` if it can prove that at least one
-    /// output expression in the machine throws on the given input.
+    /// When all outputs are not required, totally invalid outputs are returned
+    /// in place, while every non-error output must still be correctly rounded.
     pub fn apply(
         &mut self,
         args: &[Ival],
         hint: Option<&[Hint]>,
         max_iterations: usize,
+        require_all_outputs: bool,
     ) -> Result<Vec<Ival>, RivalError> {
         self.load_arguments(args);
         let hint_storage;
@@ -52,7 +53,7 @@ impl<D: Discretization> Machine<D> {
         };
 
         for iteration in 0..max_iterations {
-            if let Some(results) = self.run_iteration(iteration, hint_slice)? {
+            if let Some(results) = self.run_iteration(iteration, hint_slice, require_all_outputs)? {
                 return Ok(results);
             }
         }
@@ -73,6 +74,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         args: &[Ival],
         hint: Option<&[Hint]>,
+        require_all_outputs: bool,
     ) -> Result<Vec<Ival>, RivalError> {
         self.load_arguments(args);
 
@@ -93,7 +95,7 @@ impl<D: Discretization> Machine<D> {
             self.baseline_adjust(prec);
             self.run_with_hint(hint_slice);
 
-            match self.collect_outputs()? {
+            match self.collect_outputs(require_all_outputs)? {
                 Some(outputs) => return Ok(outputs),
                 None => {
                     let next = prec.saturating_mul(2);
@@ -116,6 +118,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         rect: &[Ival],
         hint: Option<&[Hint]>,
+        require_all_outputs: bool,
     ) -> (Ival, Vec<Hint>, bool) {
         self.load_arguments(rect);
 
@@ -131,7 +134,7 @@ impl<D: Discretization> Machine<D> {
         self.baseline_adjust(self.disc.target().saturating_add(10));
         self.run_with_hint(hint_slice);
 
-        let (good, _done, bad, stuck) = self.return_flags();
+        let (good, _done, bad, stuck) = self.return_flags(require_all_outputs);
         let (next_hint, converged) = self.make_hint(hint_slice);
 
         let status = Ival::bool_interval(bad || stuck, (!good) || stuck);
@@ -142,8 +145,9 @@ impl<D: Discretization> Machine<D> {
     /// return only the boolean interval status.
     ///
     /// See [`Machine::analyze`] for details on the return value.
-    pub fn analyze_baseline(&mut self, rect: &[Ival]) -> Ival {
-        let (status, _hint, _conv) = self.analyze_baseline_with_hints(rect, None);
+    pub fn analyze_baseline(&mut self, rect: &[Ival], require_all_outputs: bool) -> Ival {
+        let (status, _hint, _conv) =
+            self.analyze_baseline_with_hints(rect, None, require_all_outputs);
         status
     }
 
@@ -152,6 +156,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         iteration: usize,
         hints: &[Hint],
+        require_all_outputs: bool,
     ) -> Result<Option<Vec<Ival>>, RivalError> {
         assert_eq!(hints.len(), self.instructions.len(), "hint length mismatch");
         self.iteration = iteration;
@@ -159,21 +164,16 @@ impl<D: Discretization> Machine<D> {
             return Err(RivalError::Unsamplable);
         }
         self.run_with_hint(hints);
-        self.collect_outputs()
+        self.collect_outputs(require_all_outputs)
     }
 
     /// Analyze an input rectangle using adaptive precision tuning.
     ///
     /// Returns a `(status, hints, converged)` tuple:
     ///
-    /// - `status` is a boolean interval indicating whether a call to
-    ///   [`Machine::apply`] with inputs in the supplied `rect` is
-    ///   guaranteed to raise an error. If false is returned, there is
-    ///   no point calling `apply` with any point in the input range.
-    ///   If uncertain, some points may raise errors while others may
-    ///   not, though nothing is guaranteed. If true is returned,
-    ///   `InvalidInput` will not be raised for any point in the range;
-    ///   however, `Unsamplable` may still be raised.
+    /// - `status` describes failure under the selected output policy.
+    ///   A true lower endpoint means definite failure; otherwise, a true
+    ///   upper endpoint means possible failure.
     ///
     /// - `hints` is a vector of [`Hint`]s that can be passed to
     ///   subsequent calls to [`Machine::apply`] to skip unnecessary
@@ -184,6 +184,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         rect: &[Ival],
         hint: Option<&[Hint]>,
+        require_all_outputs: bool,
     ) -> (Ival, Vec<Hint>, bool) {
         self.load_arguments(rect);
 
@@ -201,7 +202,7 @@ impl<D: Discretization> Machine<D> {
         self.adjust(hint_slice);
         self.run_with_hint(hint_slice);
 
-        let (good, _done, bad, stuck) = self.return_flags();
+        let (good, _done, bad, stuck) = self.return_flags(require_all_outputs);
         let (next_hint, converged) = self.make_hint(hint_slice);
 
         let status = Ival::bool_interval(bad || stuck, (!good) || stuck);
@@ -210,22 +211,12 @@ impl<D: Discretization> Machine<D> {
 
     /// Analyze a hyper-rectangle and return only the boolean interval status.
     ///
-    /// Returns a boolean interval which indicates whether a call to
-    /// [`Machine::apply`], with inputs in the supplied `rect`, is
-    /// guaranteed to raise an error.
-    ///
-    /// In other words, if false is returned, there is no point calling
-    /// `apply` with any point in the input range. If uncertain, some
-    /// points in the range may raise errors, while others may not,
-    /// though nothing is guaranteed. If true is returned,
-    /// [`RivalError::InvalidInput`] will not be raised for any point
-    /// in the range. However, [`RivalError::Unsamplable`] may still
-    /// be raised.
+    /// Returns the status described by [`Machine::analyze_with_hints`].
     ///
     /// The advantage of `analyze` over `apply` is that it applies to
     /// whole ranges of input points and is much faster.
-    pub fn analyze(&mut self, rect: &[Ival]) -> Ival {
-        let (status, _hint, _conv) = self.analyze_with_hints(rect, None);
+    pub fn analyze(&mut self, rect: &[Ival], require_all_outputs: bool) -> Ival {
+        let (status, _hint, _conv) = self.analyze_with_hints(rect, None, require_all_outputs);
         status
     }
 
@@ -384,8 +375,11 @@ impl<D: Discretization> Machine<D> {
     }
 
     /// Gather outputs and translate evaluation state into convergence results.
-    fn collect_outputs(&mut self) -> Result<Option<Vec<Ival>>, RivalError> {
-        let (good, done, bad, stuck) = self.return_flags();
+    fn collect_outputs(
+        &mut self,
+        require_all_outputs: bool,
+    ) -> Result<Option<Vec<Ival>>, RivalError> {
+        let (good, done, bad, stuck) = self.return_flags(require_all_outputs);
         let mut outputs = Vec::with_capacity(self.outputs.len());
 
         for &root in &self.outputs {
@@ -406,22 +400,30 @@ impl<D: Discretization> Machine<D> {
     }
 
     /// Compute (good, done, bad, stuck) flags and update output_distance.
-    fn return_flags(&mut self) -> (bool, bool, bool, bool) {
-        let mut good = self.outputs.is_empty();
+    fn return_flags(&mut self, require_all_outputs: bool) -> (bool, bool, bool, bool) {
+        let mut good = require_all_outputs || self.outputs.is_empty();
         let mut done = true;
-        let mut bad = !self.outputs.is_empty();
+        let mut bad = !require_all_outputs && !self.outputs.is_empty();
         let mut stuck = false;
 
         for (idx, &root) in self.outputs.iter().enumerate() {
             let value = &self.registers[root];
-            bad &= value.err.total;
-            good |= !value.err.partial;
+            if require_all_outputs {
+                if value.err.total {
+                    bad = true;
+                } else if value.err.partial {
+                    good = false;
+                }
+            } else {
+                good |= !value.err.partial && !value.err.total;
+                bad &= value.err.total;
+            }
             self.output_distance[idx] = false;
 
-            if value.err.total {
+            if !require_all_outputs && value.err.total {
                 continue;
             }
-            if value.err.partial {
+            if !require_all_outputs && value.err.partial {
                 done = false;
             }
 
@@ -444,12 +446,12 @@ impl<D: Discretization> Machine<D> {
 /// Errors that can occur during [`Machine::apply`].
 ///
 /// Note that [`Machine::apply`] will only return a result if it can prove
-/// that it has correctly-rounded the output, and it will only return
-/// [`RivalError::InvalidInput`] if it can prove that at least one of the
-/// output expressions in the machine throws on the given input.
+/// that it has correctly rounded every non-error output. It only returns
+/// [`RivalError::InvalidInput`] when the selected evaluation policy proves
+/// the input invalid.
 #[derive(thiserror::Error, Debug)]
 pub enum RivalError {
-    /// The input point is invalid for at least one compiled expression.
+    /// The input point is invalid under the evaluation policy being used.
     ///
     /// For example, taking the square root of a negative number, or
     /// dividing by zero.

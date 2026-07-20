@@ -20,7 +20,7 @@ pub enum RivalError {
     Unsamplable = -2,
 }
 
-pub const RIVAL_ABI_VERSION: u32 = 1;
+pub const RIVAL_ABI_VERSION: u32 = 2;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rival_version() -> u32 {

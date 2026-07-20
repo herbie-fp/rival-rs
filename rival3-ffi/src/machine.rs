@@ -175,8 +175,9 @@ unsafe fn apply_inner(
     n_out: usize,
     hints: *const RivalHints,
     max_precision: u32,
-    // Determines whether to use use apply or apply_baseline.
+    // Selects adaptive (`Some`) or baseline (`None`) evaluation.
     max_iterations: Option<usize>,
+    require_all_outputs: bool,
 ) -> RivalError {
     if n_args != wrapper.n_vars || n_out != wrapper.n_exprs {
         return RivalError::InvalidInput;
@@ -196,8 +197,12 @@ unsafe fn apply_inner(
     let hints_opt = unsafe { extract_hints(hints) };
 
     let result = match max_iterations {
-        Some(iters) => wrapper.machine.apply(&wrapper.arg_buf, hints_opt, iters),
-        None => wrapper.machine.apply_baseline(&wrapper.arg_buf, hints_opt),
+        Some(iters) => wrapper
+            .machine
+            .apply(&wrapper.arg_buf, hints_opt, iters, require_all_outputs),
+        None => wrapper
+            .machine
+            .apply_baseline(&wrapper.arg_buf, hints_opt, require_all_outputs),
     };
 
     match result {
@@ -217,6 +222,7 @@ unsafe fn analyze_inner(
     n_args: usize,
     hints: *const RivalHints,
     baseline: bool,
+    require_all_outputs: bool,
 ) -> RivalAnalyzeResult {
     if n_args != wrapper.n_vars {
         return invalid_analyze_result();
@@ -235,11 +241,11 @@ unsafe fn analyze_inner(
     let (status, next_hints, converged) = if baseline {
         wrapper
             .machine
-            .analyze_baseline_with_hints(&wrapper.rect_buf, hints_opt)
+            .analyze_baseline_with_hints(&wrapper.rect_buf, hints_opt, require_all_outputs)
     } else {
         wrapper
             .machine
-            .analyze_with_hints(&wrapper.rect_buf, hints_opt)
+            .analyze_with_hints(&wrapper.rect_buf, hints_opt, require_all_outputs)
     };
 
     RivalAnalyzeResult {
@@ -378,6 +384,7 @@ pub unsafe extern "C" fn rival_apply(
     hints: *const RivalHints,
     max_iterations: usize,
     max_precision: u32,
+    require_all_outputs: bool,
 ) -> RivalError {
     if machine.is_null() || out.is_null() || (args.is_null() && n_args > 0) {
         return RivalError::InvalidInput;
@@ -394,6 +401,7 @@ pub unsafe extern "C" fn rival_apply(
             hints,
             max_precision,
             Some(max_iterations),
+            require_all_outputs,
         )
     }
 }
@@ -407,6 +415,7 @@ pub unsafe extern "C" fn rival_apply_baseline(
     n_out: usize,
     hints: *const RivalHints,
     max_precision: u32,
+    require_all_outputs: bool,
 ) -> RivalError {
     if machine.is_null() || out.is_null() || (args.is_null() && n_args > 0) {
         return RivalError::InvalidInput;
@@ -423,6 +432,7 @@ pub unsafe extern "C" fn rival_apply_baseline(
             hints,
             max_precision,
             None,
+            require_all_outputs,
         )
     }
 }
@@ -433,13 +443,14 @@ pub unsafe extern "C" fn rival_analyze_with_hints(
     rect: *const *const mpfr_t,
     n_args: usize,
     hints: *const RivalHints,
+    require_all_outputs: bool,
 ) -> RivalAnalyzeResult {
     if machine.is_null() || rect.is_null() {
         return invalid_analyze_result();
     }
 
     let wrapper = unsafe { &mut *machine };
-    unsafe { analyze_inner(wrapper, rect, n_args, hints, false) }
+    unsafe { analyze_inner(wrapper, rect, n_args, hints, false, require_all_outputs) }
 }
 
 #[unsafe(no_mangle)]
@@ -448,13 +459,14 @@ pub unsafe extern "C" fn rival_analyze_baseline_with_hints(
     rect: *const *const mpfr_t,
     n_args: usize,
     hints: *const RivalHints,
+    require_all_outputs: bool,
 ) -> RivalAnalyzeResult {
     if machine.is_null() || rect.is_null() {
         return invalid_analyze_result();
     }
 
     let wrapper = unsafe { &mut *machine };
-    unsafe { analyze_inner(wrapper, rect, n_args, hints, true) }
+    unsafe { analyze_inner(wrapper, rect, n_args, hints, true, require_all_outputs) }
 }
 
 #[unsafe(no_mangle)]

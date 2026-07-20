@@ -10,12 +10,18 @@
 
 (provide rival-compile
          rival-apply
+         rival-apply/partial
          baseline-compile
          baseline-apply
+         baseline-apply/partial
          rival-analyze-with-hints
+         rival-analyze-with-hints/partial
          rival-analyze
+         rival-analyze/partial
          baseline-analyze-with-hints
+         baseline-analyze-with-hints/partial
          baseline-analyze
+         baseline-analyze/partial
          rival-profile
          rival-set-profiling!
          rival-profiling-enabled?
@@ -199,14 +205,17 @@
 (define-rival rival_machine_get_profiling (_fun _pointer -> _rival-profiling-mode))
 
 (define-rival rival_apply
-              (_fun _pointer _pointer _size _pointer _size _pointer _size _uint32 -> _rival-error))
+              (_fun _pointer _pointer _size _pointer _size _pointer _size _uint32 _stdbool
+                    -> _rival-error))
 
 (define-rival rival_apply_baseline
-              (_fun _pointer _pointer _size _pointer _size _pointer _uint32 -> _rival-error))
+              (_fun _pointer _pointer _size _pointer _size _pointer _uint32 _stdbool
+                    -> _rival-error))
 
-(define-rival rival_analyze_with_hints (_fun _pointer _pointer _size _pointer -> _analyze-result))
+(define-rival rival_analyze_with_hints
+              (_fun _pointer _pointer _size _pointer _stdbool -> _analyze-result))
 (define-rival rival_analyze_baseline_with_hints
-              (_fun _pointer _pointer _size _pointer -> _analyze-result))
+              (_fun _pointer _pointer _size _pointer _stdbool -> _analyze-result))
 
 (define-rival rival_hints_free (_fun _pointer -> _void))
 (define-rival rival_hints_len (_fun _pointer -> _size))
@@ -220,8 +229,8 @@
               (_fun _pointer (out : (_ptr o _size)) -> (ptr : _pointer) -> (values ptr out)))
 
 (let ([v (rival_version)])
-  (unless (= v 1)
-    (error 'rival3 "ABI version mismatch: expected 1, got ~a" v)))
+  (unless (= v 2)
+    (error 'rival3 "ABI version mismatch: expected 2, got ~a" v)))
 
 (struct machine-wrapper (ptr n-vars n-exprs discs arg-buf arg-bfs out-buf out-bfs rect-buf name-table)
   #:property prop:cpointer
@@ -524,17 +533,36 @@
                pt
                hints
                (lambda (m a na o no h)
-                 (rival_apply m a na o no h (*rival-max-iterations*) (*rival-max-precision*)))
+                 (rival_apply
+                  m a na o no h (*rival-max-iterations*) (*rival-max-precision*) #t))
                'rival-apply))
+
+(define (rival-apply/partial machine pt [hints #f])
+  (apply-inner machine
+               pt
+               hints
+               (lambda (m a na o no h)
+                 (rival_apply
+                  m a na o no h (*rival-max-iterations*) (*rival-max-precision*) #f))
+               'rival-apply/partial))
 
 (define (baseline-apply machine pt [hints #f])
   (apply-inner machine
                pt
                hints
-               (lambda (m a na o no h) (rival_apply_baseline m a na o no h (*rival-max-precision*)))
+               (lambda (m a na o no h)
+                 (rival_apply_baseline m a na o no h (*rival-max-precision*) #t))
                'baseline-apply))
 
-(define (analyze-inner machine rect hint ffi-fn error-name)
+(define (baseline-apply/partial machine pt [hints #f])
+  (apply-inner machine
+               pt
+               hints
+               (lambda (m a na o no h)
+                 (rival_apply_baseline m a na o no h (*rival-max-precision*) #f))
+               'baseline-apply/partial))
+
+(define (analyze-inner machine rect hint ffi-fn require-all? error-name)
   (define n-args (vector-length rect))
   (define rect-ptrs (machine-wrapper-rect-buf machine))
   (for ([i (in-range n-args)]
@@ -543,7 +571,7 @@
     (ptr-set! rect-ptrs _mpfr-pointer (+ (* 2 i) 1) (input->bf (ival-hi iv))))
   (define hint-ptr (and hint (hints-wrapper-ptr hint)))
   (match-define (list status-code is-error maybe-error converged hints-ptr)
-    (ffi-fn (machine-wrapper-ptr machine) rect-ptrs n-args hint-ptr))
+    (ffi-fn (machine-wrapper-ptr machine) rect-ptrs n-args hint-ptr require-all?))
   (match status-code
     ['invalid_input (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) rect))]
     ['ok (void)]
@@ -557,16 +585,31 @@
   (list (ival is-error maybe-error) new-hints converged))
 
 (define (rival-analyze-with-hints machine rect [hint #f])
-  (analyze-inner machine rect hint rival_analyze_with_hints 'rival-analyze-with-hints))
+  (analyze-inner machine rect hint rival_analyze_with_hints #t 'rival-analyze-with-hints))
+
+(define (rival-analyze-with-hints/partial machine rect [hint #f])
+  (analyze-inner
+   machine rect hint rival_analyze_with_hints #f 'rival-analyze-with-hints/partial))
 
 (define (rival-analyze machine rect)
   (car (rival-analyze-with-hints machine rect)))
 
+(define (rival-analyze/partial machine rect)
+  (car (rival-analyze-with-hints/partial machine rect)))
+
 (define (baseline-analyze-with-hints machine rect [hint #f])
-  (analyze-inner machine rect hint rival_analyze_baseline_with_hints 'baseline-analyze-with-hints))
+  (analyze-inner
+   machine rect hint rival_analyze_baseline_with_hints #t 'baseline-analyze-with-hints))
+
+(define (baseline-analyze-with-hints/partial machine rect [hint #f])
+  (analyze-inner
+   machine rect hint rival_analyze_baseline_with_hints #f 'baseline-analyze-with-hints/partial))
 
 (define (baseline-analyze machine rect)
   (car (baseline-analyze-with-hints machine rect)))
+
+(define (baseline-analyze/partial machine rect)
+  (car (baseline-analyze-with-hints/partial machine rect)))
 
 (define (rival-profile machine param)
   (match param

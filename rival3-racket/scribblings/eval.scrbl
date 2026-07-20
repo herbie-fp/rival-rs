@@ -76,13 +76,9 @@ preconditions, tests, @code{try}/@code{catch} blocks, and others.
    [hi (or/c bigfloat? boolean?)])]{
 An interval with endpoints @racket[lo] and @racket[hi].
 For real-valued intervals, both endpoints are @racket[bigfloat?] values.
-For boolean intervals (as returned by @racket[rival-analyze]):
-an @racket[ival] where @racket[lo] = @racket[hi] = @racket[#t]
-  represents "definitely no error";
-an @racket[ival] where @racket[lo] = @racket[hi] = @racket[#f]
-  represents "definitely has error";
-and an @racket[ival] where @racket[lo] = @racket[#f] and @racket[hi] = @racket[#t]
-  represents "uncertain" (some inputs may have errors, others may not).
+For boolean intervals returned by @racket[rival-analyze], a true
+@racket[lo] means definite failure; otherwise, a true @racket[hi]
+means possible failure.
 }
 
 @section{Compiling Real Expressions}
@@ -180,6 +176,21 @@ at least one of the @racket[exprs] on the @racket[point],
 @racket[rival-apply] raises @racket[exn:rival:unsamplable].
 }
 
+@defproc[
+  (rival-apply/partial
+    [machine rival-machine?]
+    [point (vectorof (or/c bigfloat? boolean?))]
+    [hints (or/c rival-hints? #f) #f])
+  (vectorof (or/c T 'invalid))]{
+Like @racket[rival-apply], but preserves the results of valid expressions
+when other expressions are totally invalid. Invalid output positions
+contain @racket['invalid], and @racket[exn:rival:invalid] is raised only
+when every output is invalid. @racket[baseline-apply/partial] provides
+the same behavior for a baseline machine. Use
+@racket[rival-analyze-with-hints/partial] (or its baseline counterpart)
+when analysis must use this policy too.
+}
+
 @deftogether[(
   @defstruct*[(exn:rival exn:fail) ()]
   @defstruct*[(exn:rival:invalid exn:rival) ([pt (vectorof (or/c bigfloat? boolean?))])]
@@ -220,18 +231,9 @@ likely sufficient for most use cases.
     [machine rival-machine?]
     [input-ranges (vectorof ival?)])
   ival?]{
-Returns a boolean @racket[ival?] which indicates whether a call to @racket[rival-apply],
-with inputs in the supplied @racket[input-ranges],
-is guaranteed to raise an exception.
-
-In other words, if @racket[(ival #f #f)] is returned, there is no point
-calling @racket[rival-apply] with any point in the
-@racket[input-ranges]. If @racket[(ival #f #t)] is returned, some points
-in the @racket[input-ranges] may raise errors, while others may not,
-though nothing is guaranteed. If @racket[(ival #t #t)] is returned, an
-@racket[exn:rival:invalid] will not be raised for any point in the
-@racket[input-ranges]. However, a @racket[exn:rival:unsamplable] may
-still be raised.
+Returns a boolean @racket[ival?] describing all-outputs-required failure over
+the supplied @racket[input-ranges], using the endpoint interpretation
+described above.
 }
 
 @defproc[

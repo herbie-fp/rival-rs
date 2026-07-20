@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include "mpfr.h"
 
-#define RIVAL_ABI_VERSION 1
+#define RIVAL_ABI_VERSION 2
 
 #define RIVAL_EXPR_INVALID UINT32_MAX
 
@@ -290,7 +290,8 @@ RivalError rival_apply(struct RivalMachine *machine,
                        uintptr_t n_out,
                        const struct RivalHints *hints,
                        uintptr_t max_iterations,
-                       uint32_t max_precision);
+                       uint32_t max_precision,
+                       bool require_all_outputs);
 
 RivalError rival_apply_baseline(struct RivalMachine *machine,
                                 const mpfr_t *const *args,
@@ -298,17 +299,20 @@ RivalError rival_apply_baseline(struct RivalMachine *machine,
                                 mpfr_t *const *out,
                                 uintptr_t n_out,
                                 const struct RivalHints *hints,
-                                uint32_t max_precision);
+                                uint32_t max_precision,
+                                bool require_all_outputs);
 
 struct RivalAnalyzeResult rival_analyze_with_hints(struct RivalMachine *machine,
                                                    const mpfr_t *const *rect,
                                                    uintptr_t n_args,
-                                                   const struct RivalHints *hints);
+                                                   const struct RivalHints *hints,
+                                                   bool require_all_outputs);
 
 struct RivalAnalyzeResult rival_analyze_baseline_with_hints(struct RivalMachine *machine,
                                                             const mpfr_t *const *rect,
                                                             uintptr_t n_args,
-                                                            const struct RivalHints *hints);
+                                                            const struct RivalHints *hints,
+                                                            bool require_all_outputs);
 
 uintptr_t rival_profiler_count(const struct RivalMachine *machine);
 
