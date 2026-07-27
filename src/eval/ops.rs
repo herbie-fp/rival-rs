@@ -4,21 +4,6 @@ use crate::eval::adjust::path_reduction;
 use crate::eval::macros::def_ops;
 use crate::eval::tricks::{AmplBounds, TrickContext, crosses_zero, get_slack};
 use crate::interval::Ival;
-use Expr::*;
-use rug::Float;
-
-/// Check if an expression is 2 * PI
-fn is_two_pi(expr: &Expr) -> bool {
-    match expr {
-        Expr::Mul(a, b) => {
-            matches!((&**a, &**b),
-                (Expr::Literal(v), Expr::Pi)
-                if (v.to_f64() - 2.0).abs() == 0.0
-            )
-        }
-        _ => false,
-    }
-}
 
 def_ops! {
     constant {
@@ -51,30 +36,6 @@ def_ops! {
         Sqrt: {
             method: sqrt_assign,
             bounds: |ctx, _, inp| AmplBounds::new((ctx.logspan(inp) / 2).saturating_sub(1), 0),
-            optimize: |arg| {
-                // sqrt(x^2 + y^2) => hypot(x, y)
-                // sqrt(x^2 + 1) => hypot(x, 1)
-                // sqrt(1 + x^2) => hypot(1, x)
-                match arg {
-                    // TODO: Consider pow(x, 2) pattern in addition to x * x
-                    Add(a, b) => match (&*a, &*b) {
-                        // sqrt(x^2 + y^2)
-                        (Mul(x1, x2), Mul(y1, y2)) if x1 == x2 && y1 == y2 => {
-                            Hypot(x1.clone(), y1.clone())
-                        }
-                        // sqrt(x^2 + 1)
-                        (Mul(x1, x2), Literal(one)) if x1 == x2 && *one == 1.0 => {
-                            Hypot(x1.clone(), Box::new(Literal(one.clone())))
-                        }
-                        // sqrt(1 + x^2)
-                        (Literal(one), Mul(x1, x2)) if x1 == x2 && *one == 1.0 => {
-                            Hypot(Box::new(Literal(one.clone())), x1.clone())
-                        }
-                        _ => Sqrt(Box::new(Add(a, b))),
-                    },
-                    other => Sqrt(Box::new(other)),
-                }
-            },
         },
 
         Cbrt: {
@@ -90,15 +51,6 @@ def_ops! {
                     ctx.minlog(inp, true)
                 } else { 0 };
                 AmplBounds::new(upper, lower)
-            },
-            optimize: |arg| {
-                // exp(log(x)) => x
-                if let Log(x) = arg {
-                    let pred = Gt(x.clone(), Box::new(Literal(Float::with_val(53, 0.0))));
-                    If(Box::new(Assert(Box::new(pred))), x.clone(), x)
-                } else {
-                    Exp(Box::new(arg))
-                }
             },
         },
 
@@ -130,20 +82,6 @@ def_ops! {
                     -ctx.maxlog(out, true)
                 } else { 0 };
                 AmplBounds::new(upper, lower)
-            },
-            // TODO: Get rid of these optimize clones
-            optimize: |arg| {
-                // log(exp(x)) => x
-                match arg {
-                    Exp(x) => *x,
-                    // log(1 + x) or log(x + 1) => log1p(x)
-                    Add(a, b) => match (&*a, &*b) {
-                        (Literal(one), x) if *one == 1.0 => Log1p(Box::new(x.clone())),
-                        (x, Literal(one)) if *one == 1.0 => Log1p(Box::new(x.clone())),
-                        _ => Log(Box::new(Add(a, b))),
-                    },
-                    other => Log(Box::new(other)),
-                }
             },
         },
 
@@ -194,42 +132,6 @@ def_ops! {
                 } else { 0 };
                 AmplBounds::new(upper, lower)
             },
-            optimize: |arg| {
-                match arg {
-                    // sin(PI * (x / n))
-                    Mul(a, b) if matches!(&*a, Pi) => match &*b {
-                        Div(x, n) => if let Literal(nval) = &**n {
-                            let i = nval.to_f64() as u64;
-                            if i as f64 == nval.to_f64() && i > 0 {
-                                return Sinu(2 * i, x.clone());
-                            }
-                            Sin(Box::new(Mul(a, b)))
-                        } else {
-                            Sin(Box::new(Mul(a, b)))
-                        },
-                        // sin(PI * x)
-                        _ => Sinu(2, b.clone()),
-                    },
-                    // sin((x / n) * PI) or sin(x * PI)
-                    Mul(a, b) if matches!(&*b, Pi) => match &*a {
-                        Div(x, n) => if let Literal(nval) = &**n {
-                            let i = nval.to_f64() as u64;
-                            if i as f64 == nval.to_f64() && i > 0 {
-                                return Sinu(2 * i, x.clone());
-                            }
-                            Sin(Box::new(Mul(a, b)))
-                        } else {
-                            Sin(Box::new(Mul(a, b)))
-                        },
-                        // sin(x * PI)
-                        _ => Sinu(2, a.clone()),
-                    },
-                    // sin((2*PI) * x) or sin(x * (2*PI))
-                    Mul(a, b) if is_two_pi(&a) => Sinu(1, b),
-                    Mul(a, b) if is_two_pi(&b) => Sinu(1, a),
-                    _ => Sin(Box::new(arg)),
-                }
-            },
         },
 
         Cos: {
@@ -241,42 +143,6 @@ def_ops! {
                     -ctx.maxlog(out, true) - 2
                 } else { 0 };
                 AmplBounds::new(upper, lower)
-            },
-            optimize: |arg| {
-                match arg {
-                    // cos(PI * (x / n))
-                    Mul(a, b) if matches!(&*a, Pi) => match &*b {
-                        Div(x, n) => if let Literal(nval) = &**n {
-                            let i = nval.to_f64() as u64;
-                            if i as f64 == nval.to_f64() && i > 0 {
-                                return Cosu(2 * i, x.clone());
-                            }
-                            Cos(Box::new(Mul(a, b)))
-                        } else {
-                            Cos(Box::new(Mul(a, b)))
-                        },
-                        // cos(PI * x)
-                        _ => Cosu(2, b.clone()),
-                    },
-                    // cos((x / n) * PI) or cos(x * PI)
-                    Mul(a, b) if matches!(&*b, Pi) => match &*a {
-                        Div(x, n) => if let Literal(nval) = &**n {
-                            let i = nval.to_f64() as u64;
-                            if i as f64 == nval.to_f64() && i > 0 {
-                                return Cosu(2 * i, x.clone());
-                            }
-                            Cos(Box::new(Mul(a, b)))
-                        } else {
-                            Cos(Box::new(Mul(a, b)))
-                        },
-                        // cos(x * PI)
-                        _ => Cosu(2, a.clone()),
-                    },
-                    // cos((2*PI) * x) or cos(x * (2*PI))
-                    Mul(a, b) if is_two_pi(&a) => Cosu(1, b),
-                    Mul(a, b) if is_two_pi(&b) => Cosu(1, a),
-                    _ => Cos(Box::new(arg)),
-                }
             },
         },
 
@@ -296,42 +162,6 @@ def_ops! {
                         - 1
                 } else { 0 };
                 AmplBounds::new(upper, lower)
-            },
-            optimize: |arg| {
-                match arg {
-                    // tan(PI * (x / n))
-                    Mul(a, b) if matches!(&*a, Pi) => match &*b {
-                        Div(x, n) => if let Literal(nval) = &**n {
-                            let i = nval.to_f64() as u64;
-                            if i as f64 == nval.to_f64() && i > 0 {
-                                return Tanu(2 * i, x.clone());
-                            }
-                            Tan(Box::new(Mul(a, b)))
-                        } else {
-                            Tan(Box::new(Mul(a, b)))
-                        },
-                        // tan(PI * x)
-                        _ => Tanu(2, b.clone()),
-                    },
-                    // tan((x / n) * PI) or tan(x * PI)
-                    Mul(a, b) if matches!(&*b, Pi) => match &*a {
-                        Div(x, n) => if let Literal(nval) = &**n {
-                            let i = nval.to_f64() as u64;
-                            if i as f64 == nval.to_f64() && i > 0 {
-                                return Tanu(2 * i, x.clone());
-                            }
-                            Tan(Box::new(Mul(a, b)))
-                        } else {
-                            Tan(Box::new(Mul(a, b)))
-                        },
-                        // tan(x * PI)
-                        _ => Tanu(2, a.clone()),
-                    },
-                    // tan((2*PI) * x) or tan(x * (2*PI))
-                    Mul(a, b) if is_two_pi(&a) => Tanu(1, b),
-                    Mul(a, b) if is_two_pi(&b) => Tanu(1, a),
-                    _ => Tan(Box::new(arg)),
-                }
             },
         },
 
@@ -542,66 +372,6 @@ def_ops! {
 
                 (AmplBounds::new(upper_x, lower_x), AmplBounds::new(upper_y, lower_y))
             },
-            optimize: |base, exp| {
-                if let Literal(exp_val) = &exp {
-                    // pow(arg, 2) => pow2(arg)
-                    if (exp_val.to_f64() - 2.0).abs() == 0.0 {
-                        return Pow2(Box::new(base));
-                    }
-                    // pow(arg, 0.5) => sqrt(arg)
-                    if (exp_val.to_f64() - 0.5).abs() == 0.0 {
-                        return Sqrt(Box::new(base));
-                    }
-                }
-
-                // pow(x, p/q) optimizations
-                if let Rational(rat) = &exp {
-                    let num = rat.numer();
-                    let den = rat.denom();
-                    // pow(x, 1/3) => cbrt(x)
-                    if *num == 1 && *den == 3 {
-                        return Cbrt(Box::new(base));
-                    }
-                    // pow(x, 1/2) => sqrt(x)
-                    if *num == 1 && *den == 2 {
-                        return Sqrt(Box::new(base));
-                    }
-                    // pow(x, 2) => pow2(x)
-                    if *num == 2 && *den == 1 {
-                        return Pow2(Box::new(base));
-                    }
-                    if *den == 1 {
-                        return Pow(Box::new(base), Box::new(Rational(rat.clone())));
-                    }
-                    // pow(fabs(x), y) stays as-is (prevent double wrapping)
-                    if matches!(&base, Fabs(_)) {
-                        return Pow(Box::new(base), Box::new(Rational(rat.clone())));
-                    }
-                    let den_odd = den.is_odd();
-                    let num_odd = num.is_odd();
-                    if den_odd && !num_odd {
-                        return Pow(Box::new(Fabs(Box::new(base))), Box::new(Rational(rat.clone())));
-                    }
-                    if den_odd && num_odd {
-                        return Copysign(
-                            Box::new(Pow(Box::new(Fabs(Box::new(base.clone()))), Box::new(Rational(rat.clone())))),
-                            Box::new(base),
-                        );
-                    }
-                }
-
-                match base {
-                    // pow(2, arg) => exp2(arg)
-                    Literal(base_val) if (base_val.to_f64() - 2.0).abs() == 0.0 => {
-                        Exp2(Box::new(exp))
-                    }
-                    // pow(E, arg) => exp(arg)
-                    E => Exp(Box::new(exp)),
-                    // pow(fabs(x), y) stays as is (already optimal for handling negative bases)
-                    Fabs(_) => Pow(Box::new(base), Box::new(exp)),
-                    _ => Pow(Box::new(base), Box::new(exp)),
-                }
-            },
         },
 
         Fdim: {
@@ -652,19 +422,6 @@ def_ops! {
                     ctx.minlog(rhs, true) - ctx.maxlog(out, true)
                 } else { 0 };
                 (AmplBounds::new(lhs_upper, lhs_lower), AmplBounds::new(rhs_upper, rhs_lower))
-            },
-            optimize: |lhs, rhs| {
-                match (&lhs, &rhs) {
-                    // (- (exp x) 1) => expm1(x)
-                    (Exp(x), Literal(one)) if one == &1.0 => {
-                        Expm1(x.clone())
-                    }
-                    // (- 1 (exp x)) => neg(expm1(x))
-                    (Literal(one), Exp(x)) if one == &1.0 => {
-                        Neg(Box::new(Expm1(x.clone())))
-                    }
-                    _ => Sub(Box::new(lhs), Box::new(rhs))
-                }
             },
         },
 
@@ -797,10 +554,6 @@ def_ops! {
                 (AmplBounds::new(ctx.logspan(b) + ctx.logspan(out), 0),
                  AmplBounds::new(ctx.logspan(a) + ctx.logspan(out), 0),
                  AmplBounds::new(ctx.logspan(out), 0))
-            },
-            optimize: |x, y, z| {
-                // fma(x, y, z) => x * y + z
-                Add(Box::new(Mul(Box::new(x), Box::new(y))), Box::new(z))
             },
         },
 

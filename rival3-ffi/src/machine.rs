@@ -1,13 +1,11 @@
 use crate::RivalError;
 use crate::discretization::RivalDiscretization;
-use crate::expr::RivalExprArena;
+use crate::expr::RivalExprBuilder;
 use crate::hints::RivalHints;
 use crate::profile::{ProfileCache, RivalExecution, RivalProfileSummary};
 use gmp_mpfr_sys::mpfr::{self, mpfr_t};
 use rival::{ErrorFlags, Hint, Ival, Machine, MachineBuilder, RivalError as CoreError};
 use rug::Float;
-use std::ffi::CStr;
-use std::os::raw::c_char;
 use std::ptr;
 use std::slice;
 
@@ -197,9 +195,11 @@ unsafe fn apply_inner(
     let hints_opt = unsafe { extract_hints(hints) };
 
     let result = match max_iterations {
-        Some(iters) => wrapper
-            .machine
-            .apply(&wrapper.arg_buf, hints_opt, iters, require_all_outputs),
+        Some(iters) => {
+            wrapper
+                .machine
+                .apply(&wrapper.arg_buf, hints_opt, iters, require_all_outputs)
+        }
         None => wrapper
             .machine
             .apply_baseline(&wrapper.arg_buf, hints_opt, require_all_outputs),
@@ -239,9 +239,11 @@ unsafe fn analyze_inner(
     let hints_opt = unsafe { extract_hints(hints) };
 
     let (status, next_hints, converged) = if baseline {
-        wrapper
-            .machine
-            .analyze_baseline_with_hints(&wrapper.rect_buf, hints_opt, require_all_outputs)
+        wrapper.machine.analyze_baseline_with_hints(
+            &wrapper.rect_buf,
+            hints_opt,
+            require_all_outputs,
+        )
     } else {
         wrapper
             .machine
@@ -270,57 +272,34 @@ pub unsafe extern "C" fn rival_machine_configure_baseline(machine: *mut RivalMac
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_machine_new(
-    arena: *const RivalExprArena,
+    builder: *const RivalExprBuilder,
     expr_handles: *const u32,
     n_exprs: usize,
-    vars: *const *const c_char,
-    n_vars: usize,
     disc: *const RivalDiscretization,
     max_precision: u32,
     profile_capacity: usize,
 ) -> *mut RivalMachine {
-    if arena.is_null() || disc.is_null() || (expr_handles.is_null() && n_exprs > 0) {
+    if builder.is_null() || disc.is_null() || (expr_handles.is_null() && n_exprs > 0) {
         return ptr::null_mut();
     }
 
     unsafe {
-        let arena_ref = &*arena;
+        let builder = &*builder;
         let handles = if n_exprs > 0 {
             slice::from_raw_parts(expr_handles, n_exprs)
         } else {
             &[]
         };
-
-        let exprs_vec = match arena_ref.materialize_all(handles) {
-            Some(exprs) => exprs,
+        let outputs = match builder.outputs(handles) {
+            Some(outputs) => outputs,
             None => return ptr::null_mut(),
         };
-
-        let vars_vec: Vec<String> = if vars.is_null() || n_vars == 0 {
-            Vec::new()
-        } else {
-            let vars_slice = slice::from_raw_parts(vars, n_vars);
-            let result: Option<Vec<String>> = vars_slice
-                .iter()
-                .map(|ptr| {
-                    if ptr.is_null() {
-                        None
-                    } else {
-                        Some(CStr::from_ptr(*ptr).to_string_lossy().into_owned())
-                    }
-                })
-                .collect();
-            match result {
-                Some(v) if v.len() == n_vars => v,
-                _ => return ptr::null_mut(),
-            }
-        };
-
+        let n_vars = builder.expressions.argument_count();
         let disc_cloned = (*disc).clone();
         let machine = MachineBuilder::new(disc_cloned)
             .max_precision(max_precision)
             .profile_capacity(profile_capacity)
-            .build(exprs_vec, vars_vec);
+            .build(&builder.expressions, &outputs);
 
         let arg_prec = machine.argument_precision();
         let arg_buf: Vec<Ival> = (0..n_vars).map(|_| Ival::zero(arg_prec)).collect();

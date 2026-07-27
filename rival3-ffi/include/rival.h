@@ -39,6 +39,109 @@ enum RivalDiscType
 typedef uint32_t RivalDiscType;
 #endif // __cplusplus
 
+enum RivalUnaryOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_UNARY_OP_NEG,
+    RIVAL_UNARY_OP_FABS,
+    RIVAL_UNARY_OP_SQRT,
+    RIVAL_UNARY_OP_CBRT,
+    RIVAL_UNARY_OP_POW2,
+    RIVAL_UNARY_OP_EXP,
+    RIVAL_UNARY_OP_EXP2,
+    RIVAL_UNARY_OP_EXPM1,
+    RIVAL_UNARY_OP_LOG,
+    RIVAL_UNARY_OP_LOG2,
+    RIVAL_UNARY_OP_LOG10,
+    RIVAL_UNARY_OP_LOG1P,
+    RIVAL_UNARY_OP_LOGB,
+    RIVAL_UNARY_OP_SIN,
+    RIVAL_UNARY_OP_COS,
+    RIVAL_UNARY_OP_TAN,
+    RIVAL_UNARY_OP_ASIN,
+    RIVAL_UNARY_OP_ACOS,
+    RIVAL_UNARY_OP_ATAN,
+    RIVAL_UNARY_OP_SINH,
+    RIVAL_UNARY_OP_COSH,
+    RIVAL_UNARY_OP_TANH,
+    RIVAL_UNARY_OP_ASINH,
+    RIVAL_UNARY_OP_ACOSH,
+    RIVAL_UNARY_OP_ATANH,
+    RIVAL_UNARY_OP_ERF,
+    RIVAL_UNARY_OP_ERFC,
+    RIVAL_UNARY_OP_LGAMMA,
+    RIVAL_UNARY_OP_TGAMMA,
+    RIVAL_UNARY_OP_RINT,
+    RIVAL_UNARY_OP_ROUND,
+    RIVAL_UNARY_OP_CEIL,
+    RIVAL_UNARY_OP_FLOOR,
+    RIVAL_UNARY_OP_TRUNC,
+    RIVAL_UNARY_OP_NOT,
+    RIVAL_UNARY_OP_ASSERT,
+    RIVAL_UNARY_OP_ERROR,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalUnaryOp;
+#endif // __cplusplus
+
+enum RivalUnaryParamOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_UNARY_PARAM_OP_COSU,
+    RIVAL_UNARY_PARAM_OP_SINU,
+    RIVAL_UNARY_PARAM_OP_TANU,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalUnaryParamOp;
+#endif // __cplusplus
+
+enum RivalBinaryOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_BINARY_OP_ADD,
+    RIVAL_BINARY_OP_SUB,
+    RIVAL_BINARY_OP_MUL,
+    RIVAL_BINARY_OP_DIV,
+    RIVAL_BINARY_OP_POW,
+    RIVAL_BINARY_OP_HYPOT,
+    RIVAL_BINARY_OP_FMIN,
+    RIVAL_BINARY_OP_FMAX,
+    RIVAL_BINARY_OP_FDIM,
+    RIVAL_BINARY_OP_COPYSIGN,
+    RIVAL_BINARY_OP_FMOD,
+    RIVAL_BINARY_OP_REMAINDER,
+    RIVAL_BINARY_OP_ATAN2,
+    RIVAL_BINARY_OP_AND,
+    RIVAL_BINARY_OP_OR,
+    RIVAL_BINARY_OP_EQ,
+    RIVAL_BINARY_OP_NE,
+    RIVAL_BINARY_OP_LT,
+    RIVAL_BINARY_OP_LE,
+    RIVAL_BINARY_OP_GT,
+    RIVAL_BINARY_OP_GE,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalBinaryOp;
+#endif // __cplusplus
+
+enum RivalTernaryOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_TERNARY_OP_FMA,
+    RIVAL_TERNARY_OP_IF,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalTernaryOp;
+#endif // __cplusplus
+
 enum RivalProfilingMode
 #ifdef __cplusplus
   : uint32_t
@@ -53,7 +156,7 @@ typedef uint32_t RivalProfilingMode;
 
 typedef struct RivalDiscretization RivalDiscretization;
 
-typedef struct RivalExprArena RivalExprArena;
+typedef struct RivalExprBuilder RivalExprBuilder;
 
 typedef struct RivalHints RivalHints;
 
@@ -108,157 +211,43 @@ struct RivalDiscretization *rival_disc_mixed(const RivalDiscType *types,
 
 void rival_disc_free(struct RivalDiscretization *disc);
 
-struct RivalExprArena *rival_expr_arena_new(void);
+struct RivalExprBuilder *rival_expr_builder_new(const char *const *vars, uintptr_t n_vars);
 
-struct RivalExprArena *rival_expr_arena_with_capacity(uintptr_t capacity);
+void rival_expr_builder_free(struct RivalExprBuilder *builder);
 
-void rival_expr_arena_free(struct RivalExprArena *arena);
+uint32_t rival_expr_var(struct RivalExprBuilder *builder, const char *name);
 
-uintptr_t rival_expr_arena_len(const struct RivalExprArena *arena);
+uint32_t rival_expr_f64(struct RivalExprBuilder *builder, double value);
 
-void rival_expr_arena_clear(struct RivalExprArena *arena);
+uint32_t rival_expr_rational(struct RivalExprBuilder *builder, int64_t num, int64_t den);
 
-uint32_t rival_expr_var(struct RivalExprArena *arena, const char *name);
+uint32_t rival_expr_bigint(struct RivalExprBuilder *builder, const char *value);
 
-uint32_t rival_expr_f64(struct RivalExprArena *arena, double value);
+uint32_t rival_expr_bigrational(struct RivalExprBuilder *builder,
+                                const char *numerator,
+                                const char *denominator);
 
-uint32_t rival_expr_rational(struct RivalExprArena *arena, int64_t num, int64_t den);
+uint32_t rival_expr_pi(struct RivalExprBuilder *builder);
 
-uint32_t rival_expr_bigint(struct RivalExprArena *arena, const char *value_str);
+uint32_t rival_expr_e(struct RivalExprBuilder *builder);
 
-uint32_t rival_expr_bigrational(struct RivalExprArena *arena,
-                                const char *num_str,
-                                const char *den_str);
+uint32_t rival_expr_unary(struct RivalExprBuilder *builder, RivalUnaryOp op, uint32_t arg);
 
-uint32_t rival_expr_pi(struct RivalExprArena *arena);
+uint32_t rival_expr_unary_param(struct RivalExprBuilder *builder,
+                                RivalUnaryParamOp op,
+                                uint64_t param,
+                                uint32_t arg);
 
-uint32_t rival_expr_e(struct RivalExprArena *arena);
+uint32_t rival_expr_binary(struct RivalExprBuilder *builder,
+                           RivalBinaryOp op,
+                           uint32_t lhs,
+                           uint32_t rhs);
 
-uint32_t rival_expr_neg(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_fabs(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_sqrt(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_cbrt(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_pow2(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_exp(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_exp2(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_expm1(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_log(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_log2(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_log10(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_log1p(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_logb(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_sin(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_cos(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_tan(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_asin(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_acos(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_atan(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_sinh(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_cosh(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_tanh(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_asinh(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_acosh(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_atanh(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_erf(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_erfc(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_lgamma(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_tgamma(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_rint(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_round(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_ceil(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_floor(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_trunc(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_not(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_assert(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_error(struct RivalExprArena *arena, uint32_t x);
-
-uint32_t rival_expr_add(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_sub(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_mul(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_div(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_pow(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_hypot(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_fmin(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_fmax(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_fdim(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_copysign(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_fmod(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_remainder(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_atan2(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_and(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_or(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_eq(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_ne(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_lt(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_le(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_gt(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_ge(struct RivalExprArena *arena, uint32_t x, uint32_t y);
-
-uint32_t rival_expr_fma(struct RivalExprArena *arena, uint32_t a, uint32_t b, uint32_t c);
-
-uint32_t rival_expr_if(struct RivalExprArena *arena, uint32_t a, uint32_t b, uint32_t c);
-
-uint32_t rival_expr_sinu(struct RivalExprArena *arena, uint64_t n, uint32_t x);
-
-uint32_t rival_expr_cosu(struct RivalExprArena *arena, uint64_t n, uint32_t x);
-
-uint32_t rival_expr_tanu(struct RivalExprArena *arena, uint64_t n, uint32_t x);
+uint32_t rival_expr_ternary(struct RivalExprBuilder *builder,
+                            RivalTernaryOp op,
+                            uint32_t arg1,
+                            uint32_t arg2,
+                            uint32_t arg3);
 
 void rival_hints_free(struct RivalHints *hints);
 
@@ -266,11 +255,9 @@ uintptr_t rival_hints_len(const struct RivalHints *hints);
 
 bool rival_machine_configure_baseline(struct RivalMachine *machine);
 
-struct RivalMachine *rival_machine_new(const struct RivalExprArena *arena,
+struct RivalMachine *rival_machine_new(const struct RivalExprBuilder *builder,
                                        const uint32_t *expr_handles,
                                        uintptr_t n_exprs,
-                                       const char *const *vars,
-                                       uintptr_t n_vars,
                                        const struct RivalDiscretization *disc,
                                        uint32_t max_precision,
                                        uintptr_t profile_capacity);

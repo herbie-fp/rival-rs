@@ -7,7 +7,10 @@ pub mod machine;
 pub mod profile;
 
 pub use discretization::{RivalDiscType, RivalDiscretization};
-pub use expr::{RIVAL_EXPR_INVALID, RivalExprArena};
+pub use expr::{
+    RIVAL_EXPR_INVALID, RivalBinaryOp, RivalExprBuilder, RivalTernaryOp, RivalUnaryOp,
+    RivalUnaryParamOp,
+};
 pub use hints::RivalHints;
 pub use machine::{RivalAnalyzeResult, RivalMachine, RivalProfilingMode};
 pub use profile::{RivalAggregatedProfile, RivalExecution, RivalProfileSummary};

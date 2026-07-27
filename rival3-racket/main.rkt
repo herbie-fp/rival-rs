@@ -109,6 +109,25 @@
 (define _rival-profiling-mode (_enum '(off = 0 on = 1) _uint32))
 (define _rival-disc-type (_enum '(bool = 0 f32 = 1 f64 = 2) _uint32))
 
+;; These operator names, and their order, must match the operator enums in the
+;; native ABI.
+(define unary-op-names
+  '(neg fabs sqrt cbrt pow2
+        exp exp2 expm1 log log2 log10 log1p logb
+        sin cos tan asin acos atan
+        sinh cosh tanh asinh acosh atanh
+        erf erfc lgamma tgamma
+        rint round ceil floor trunc
+        not assert error))
+
+(define _rival-unary-op (_enum unary-op-names _uint32))
+(define _rival-unary-param-op (_enum '(cosu sinu tanu) _uint32))
+(define _rival-binary-op
+  (_enum
+   '(add sub mul div pow hypot fmin fmax fdim copysign fmod remainder atan2 and or eq ne lt le gt ge)
+   _uint32))
+(define _rival-ternary-op (_enum '(fma if) _uint32))
+
 (define-rival rival_version (_fun -> _uint32))
 (define-rival rival_disc_f64 (_fun _uint32 -> _pointer))
 (define-rival rival_disc_f32 (_fun _uint32 -> _pointer))
@@ -116,8 +135,8 @@
 (define-rival rival_disc_mixed (_fun _pointer _size _uint32 -> _pointer))
 (define-rival rival_disc_free (_fun _pointer -> _void))
 
-(define-rival rival_expr_arena_new (_fun -> _pointer))
-(define-rival rival_expr_arena_free (_fun _pointer -> _void))
+(define-rival rival_expr_builder_new (_fun _pointer _size -> _pointer))
+(define-rival rival_expr_builder_free (_fun _pointer -> _void))
 
 (define-rival rival_expr_var (_fun _pointer _string -> _uint32))
 (define-rival rival_expr_f64 (_fun _pointer _double -> _uint32))
@@ -127,75 +146,12 @@
 (define-rival rival_expr_pi (_fun _pointer -> _uint32))
 (define-rival rival_expr_e (_fun _pointer -> _uint32))
 
-(define-rival rival_expr_neg (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_fabs (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_sqrt (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_cbrt (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_pow2 (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_exp (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_exp2 (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_expm1 (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_log (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_log2 (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_log10 (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_log1p (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_logb (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_sin (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_cos (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_tan (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_asin (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_acos (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_atan (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_sinh (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_cosh (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_tanh (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_asinh (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_acosh (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_atanh (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_erf (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_erfc (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_lgamma (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_tgamma (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_rint (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_round (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_ceil (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_floor (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_trunc (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_not (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_assert (_fun _pointer _uint32 -> _uint32))
-(define-rival rival_expr_error (_fun _pointer _uint32 -> _uint32))
+(define-rival rival_expr_unary (_fun _pointer _rival-unary-op _uint32 -> _uint32))
+(define-rival rival_expr_unary_param (_fun _pointer _rival-unary-param-op _uint64 _uint32 -> _uint32))
+(define-rival rival_expr_binary (_fun _pointer _rival-binary-op _uint32 _uint32 -> _uint32))
+(define-rival rival_expr_ternary (_fun _pointer _rival-ternary-op _uint32 _uint32 _uint32 -> _uint32))
 
-(define-rival rival_expr_add (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_sub (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_mul (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_div (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_pow (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_hypot (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_fmin (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_fmax (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_fdim (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_copysign (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_fmod (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_remainder (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_atan2 (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_and (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_or (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_eq (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_ne (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_lt (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_le (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_gt (_fun _pointer _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_ge (_fun _pointer _uint32 _uint32 -> _uint32))
-
-(define-rival rival_expr_sinu (_fun _pointer _uint64 _uint32 -> _uint32))
-(define-rival rival_expr_cosu (_fun _pointer _uint64 _uint32 -> _uint32))
-(define-rival rival_expr_tanu (_fun _pointer _uint64 _uint32 -> _uint32))
-
-(define-rival rival_expr_fma (_fun _pointer _uint32 _uint32 _uint32 -> _uint32))
-(define-rival rival_expr_if (_fun _pointer _uint32 _uint32 _uint32 -> _uint32))
-
-(define-rival rival_machine_new
-              (_fun _pointer _pointer _size _pointer _size _pointer _uint32 _size -> _pointer))
+(define-rival rival_machine_new (_fun _pointer _pointer _size _pointer _uint32 _size -> _pointer))
 (define-rival rival_machine_free (_fun _pointer -> _void))
 (define-rival rival_machine_configure_baseline (_fun _pointer -> _stdbool))
 (define-rival rival_machine_instruction_count (_fun _pointer -> _size))
@@ -272,127 +228,102 @@
     (when ptr (free-ptr ptr)))
   (free-ptr arr))
 
-;; Fold a list of args using a binary FFI function
-(define (fold-binary-ffi arena binary-fn args)
-  (foldl (lambda (arg acc) (binary-fn arena acc (expr->ffi arena arg)))
-         (expr->ffi arena (car args))
-         (cdr args)))
-
-;; Build chained comparisons (< a b c) => (and (< a b) (< b c))
-(define (chain-compare-ffi arena cmp-fn args)
-  (define ffi-args (map (lambda (a) (expr->ffi arena a)) args))
-  (define comparisons
-    (for/list ([i (in-range (sub1 (length ffi-args)))])
-      (cmp-fn arena (list-ref ffi-args i) (list-ref ffi-args (add1 i)))))
-  (foldl (lambda (cmp acc) (rival_expr_and arena acc cmp)) (car comparisons) (cdr comparisons)))
-
-(define unary-ops
-  (hasheq 'neg rival_expr_neg
-          'fabs rival_expr_fabs
-          'sqrt rival_expr_sqrt
-          'cbrt rival_expr_cbrt
-          'pow2 rival_expr_pow2
-          'exp rival_expr_exp
-          'exp2 rival_expr_exp2
-          'expm1 rival_expr_expm1
-          'log rival_expr_log
-          'log2 rival_expr_log2
-          'log10 rival_expr_log10
-          'log1p rival_expr_log1p
-          'logb rival_expr_logb
-          'sin rival_expr_sin
-          'cos rival_expr_cos
-          'tan rival_expr_tan
-          'asin rival_expr_asin
-          'acos rival_expr_acos
-          'atan rival_expr_atan
-          'sinh rival_expr_sinh
-          'cosh rival_expr_cosh
-          'tanh rival_expr_tanh
-          'asinh rival_expr_asinh
-          'acosh rival_expr_acosh
-          'atanh rival_expr_atanh
-          'erf rival_expr_erf
-          'erfc rival_expr_erfc
-          'lgamma rival_expr_lgamma
-          'tgamma rival_expr_tgamma
-          'rint rival_expr_rint
-          'round rival_expr_round
-          'ceil rival_expr_ceil
-          'floor rival_expr_floor
-          'trunc rival_expr_trunc
-          'not rival_expr_not
-          'assert rival_expr_assert
-          'error rival_expr_error))
+;; Unary operators are named the same way in Rival expressions and in the ABI.
+(define unary-ops (list->seteq unary-op-names))
 
 (define binary-ops
-  (hasheq '+ rival_expr_add
-          '- rival_expr_sub
-          '* rival_expr_mul
-          '/ rival_expr_div
-          'pow rival_expr_pow
-          'hypot rival_expr_hypot
-          'fmin rival_expr_fmin
-          'fmax rival_expr_fmax
-          'fdim rival_expr_fdim
-          'copysign rival_expr_copysign
-          'fmod rival_expr_fmod
-          'remainder rival_expr_remainder
-          'atan2 rival_expr_atan2
-          'and rival_expr_and
-          'or rival_expr_or
-          '== rival_expr_eq
-          '!= rival_expr_ne
-          '< rival_expr_lt
-          '<= rival_expr_le
-          '> rival_expr_gt
-          '>= rival_expr_ge))
+  (hasheq '+ 'add
+          '- 'sub
+          '* 'mul
+          '/ 'div
+          'pow 'pow
+          'hypot 'hypot
+          'fmin 'fmin
+          'fmax 'fmax
+          'fdim 'fdim
+          'copysign 'copysign
+          'fmod 'fmod
+          'remainder 'remainder
+          'atan2 'atan2
+          'and 'and
+          'or 'or
+          '== 'eq
+          '!= 'ne
+          '< 'lt
+          '<= 'le
+          '> 'gt
+          '>= 'ge))
 
-(define variadic-ops (hasheq '+ rival_expr_add '* rival_expr_mul 'and rival_expr_and 'or rival_expr_or))
-(define chainable-cmp-ops (hasheq '< rival_expr_lt '<= rival_expr_le '> rival_expr_gt '>= rival_expr_ge))
+(define variadic-ops (seteq '+ '* 'and 'or))
+(define chainable-cmp-ops (seteq '< '<= '> '>=))
 
-(define (expr->ffi arena expr)
-  (match expr
-    [(or 'PI '(PI)) (rival_expr_pi arena)]
-    [(or 'E '(E)) (rival_expr_e arena)]
-    [(or 'TRUE '(TRUE)) (rival_expr_f64 arena 1.0)]
-    [(or 'FALSE '(FALSE)) (rival_expr_f64 arena 0.0)]
-    [(or 'INFINITY '(INFINITY)) (rival_expr_f64 arena +inf.0)]
-    [(or 'NAN '(NAN)) (rival_expr_f64 arena +nan.0)]
-    [(? symbol?) (rival_expr_var arena (symbol->string expr))]
-    [(? exact-integer?)
-     (if (exactly-representable-at-current-bf-precision? expr)
-         (rival_expr_bigint arena (number->string expr))
-         (rival_expr_bigrational arena (number->string expr) "1"))]
-    [(? rational?)
-     (define exact-val (inexact->exact expr))
-     (if (integer? expr)
-         (rival_expr_bigint arena (number->string exact-val))
-         (rival_expr_bigrational arena
-                                 (number->string (numerator exact-val))
-                                 (number->string (denominator exact-val))))]
-    [(? real?) (rival_expr_f64 arena (exact->inexact expr))]
-    [`(- ,x) (rival_expr_neg arena (expr->ffi arena x))]
-    [`((sinu ,n) ,x) (rival_expr_sinu arena n (expr->ffi arena x))]
-    [`((cosu ,n) ,x) (rival_expr_cosu arena n (expr->ffi arena x))]
-    [`((tanu ,n) ,x) (rival_expr_tanu arena n (expr->ffi arena x))]
-    [`(fma ,a ,b ,c)
-     (rival_expr_fma arena (expr->ffi arena a) (expr->ffi arena b) (expr->ffi arena c))]
-    [`(if ,c ,t ,f)
-     (rival_expr_if arena (expr->ffi arena c) (expr->ffi arena t) (expr->ffi arena f))]
-    [`(,op ,x)
-     #:when (hash-ref unary-ops op #f)
-     ((hash-ref unary-ops op) arena (expr->ffi arena x))]
-    [`(,op ,x ,y)
-     #:when (hash-ref binary-ops op #f)
-     ((hash-ref binary-ops op) arena (expr->ffi arena x) (expr->ffi arena y))]
-    [`(,op ,x ,y ,rest ...)
-     #:when (hash-ref variadic-ops op #f)
-     (fold-binary-ffi arena (hash-ref variadic-ops op) (list* x y rest))]
-    [`(,op ,x ,y ,rest ...)
-     #:when (hash-ref chainable-cmp-ops op #f)
-     (chain-compare-ffi arena (hash-ref chainable-cmp-ops op) (list* x y rest))]
-    [_ (error 'expr->ffi "Unknown expression: ~a" expr)]))
+(define (make-expr-compiler builder)
+  ;; Compile a shared subexpression once, so that a shared input expression
+  ;; does not expand into a tree of FFI calls.
+  (define cache (make-hasheq))
+
+  (define (fold-binary op args)
+    (foldl (lambda (arg acc) (rival_expr_binary builder op acc (compile arg)))
+           (compile (car args))
+           (cdr args)))
+
+  ;; Build chained comparisons (< a b c) => (and (< a b) (< b c))
+  (define (chain-compare op args)
+    (define ffi-args (map compile args))
+    (define comparisons
+      (for/list ([lhs (in-list ffi-args)]
+                 [rhs (in-list (cdr ffi-args))])
+        (rival_expr_binary builder op lhs rhs)))
+    (foldl (lambda (comparison acc) (rival_expr_binary builder 'and acc comparison))
+           (car comparisons)
+           (cdr comparisons)))
+
+  (define (compile expr)
+    (hash-ref!
+     cache
+     expr
+     (lambda ()
+       (match expr
+         [(or 'PI '(PI)) (rival_expr_pi builder)]
+         [(or 'E '(E)) (rival_expr_e builder)]
+         [(or 'TRUE '(TRUE)) (rival_expr_f64 builder 1.0)]
+         [(or 'FALSE '(FALSE)) (rival_expr_f64 builder 0.0)]
+         [(or 'INFINITY '(INFINITY)) (rival_expr_f64 builder +inf.0)]
+         [(or 'NAN '(NAN)) (rival_expr_f64 builder +nan.0)]
+         [(? symbol?) (rival_expr_var builder (symbol->string expr))]
+         [(? exact-integer?)
+          (if (exactly-representable-at-current-bf-precision? expr)
+              (rival_expr_bigint builder (number->string expr))
+              (rival_expr_bigrational builder (number->string expr) "1"))]
+         [(? rational?)
+          (define exact-val (inexact->exact expr))
+          (if (integer? expr)
+              (rival_expr_bigint builder (number->string exact-val))
+              (rival_expr_bigrational builder
+                                      (number->string (numerator exact-val))
+                                      (number->string (denominator exact-val))))]
+         [(? real?) (rival_expr_f64 builder (exact->inexact expr))]
+         [`(- ,x) (rival_expr_unary builder 'neg (compile x))]
+         [`((sinu ,n) ,x) (rival_expr_unary_param builder 'sinu n (compile x))]
+         [`((cosu ,n) ,x) (rival_expr_unary_param builder 'cosu n (compile x))]
+         [`((tanu ,n) ,x) (rival_expr_unary_param builder 'tanu n (compile x))]
+         [`(fma ,a ,b ,c) (rival_expr_ternary builder 'fma (compile a) (compile b) (compile c))]
+         [`(if ,c ,t ,f) (rival_expr_ternary builder 'if (compile c) (compile t) (compile f))]
+         [`(,op ,x)
+          #:when (set-member? unary-ops op)
+          (rival_expr_unary builder op (compile x))]
+         [`(,op ,x ,y)
+          #:when (hash-ref binary-ops op #f)
+          (rival_expr_binary builder (hash-ref binary-ops op) (compile x) (compile y))]
+         [`(,op ,x ,y ,rest ...)
+          #:when (set-member? variadic-ops op)
+          (fold-binary (hash-ref binary-ops op) (list* x y rest))]
+         [`(,op ,x ,y ,rest ...)
+          #:when (set-member? chainable-cmp-ops op)
+          (chain-compare (hash-ref binary-ops op) (list* x y rest))]
+         [_ (error 'rival-compile "Unknown expression: ~a" expr)]))))
+
+  compile)
 
 (define (disc->ffi disc)
   (case (discretization-type disc)
@@ -421,34 +352,34 @@
   (define n-vars (length vars))
   (define n-exprs (length exprs))
 
-  (define arena (rival_expr_arena_new))
-  (define expr-handles (map (lambda (e) (expr->ffi arena e)) exprs))
-  (define exprs-arr (malloc _uint32 n-exprs 'raw))
-  (for ([i (in-naturals)]
-        [handle (in-list expr-handles)])
-    (ptr-set! exprs-arr _uint32 i handle))
-
   (define vars-arr (malloc _pointer n-vars 'raw))
   (for ([i (in-naturals)]
         [var (in-list vars)])
     (ptr-set! vars-arr _pointer i (malloc-c-string (symbol->string var))))
-
-  (define disc-ptr (discs->ffi discs))
+  (define builder (rival_expr_builder_new vars-arr n-vars))
+  (free-c-string-array vars-arr n-vars)
+  (unless builder
+    (error 'rival-compile "Failed to create expression builder"))
 
   (define machine-ptr
-    (rival_machine_new arena
-                       exprs-arr
-                       n-exprs
-                       vars-arr
-                       n-vars
-                       disc-ptr
-                       (*rival-max-precision*)
-                       (*rival-profile-executions*)))
-
-  (free-ptr exprs-arr)
-  (free-c-string-array vars-arr n-vars)
-  (rival_disc_free disc-ptr)
-  (rival_expr_arena_free arena)
+    (dynamic-wind void
+                  (lambda ()
+                    (define compile-expr (make-expr-compiler builder))
+                    (define expr-handles (map compile-expr exprs))
+                    (define disc-ptr (discs->ffi discs))
+                    (define exprs-arr (malloc _uint32 n-exprs 'raw))
+                    (for ([i (in-naturals)]
+                          [handle (in-list expr-handles)])
+                      (ptr-set! exprs-arr _uint32 i handle))
+                    (begin0 (rival_machine_new builder
+                                               exprs-arr
+                                               n-exprs
+                                               disc-ptr
+                                               (*rival-max-precision*)
+                                               (*rival-profile-executions*))
+                            (free-ptr exprs-arr)
+                            (rival_disc_free disc-ptr)))
+                  (lambda () (rival_expr_builder_free builder))))
 
   (when (not machine-ptr)
     (error 'rival-compile "Failed to create machine"))

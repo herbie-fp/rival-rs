@@ -1,20 +1,14 @@
 //! Register machine evaluator.
 
-use std::collections::HashMap;
-
 use super::{
-    ast::Expr,
+    builder::{Expression, ExpressionBuilder},
     execute,
-    instructions::{Instruction, InstructionData},
+    instructions::Instruction,
 };
 use crate::{
-    eval::{
-        ops,
-        profile::{Execution, Profiler},
-    },
+    eval::profile::{Execution, Profiler},
     interval::Ival,
 };
-use indexmap::IndexMap;
 use rug::Float;
 
 /// A discretization represents some subset of the real numbers
@@ -37,21 +31,19 @@ pub trait Discretization: Clone {
 
 /// Interval evaluation machine with persistent state and discretization.
 ///
-/// A machine is compiled from a list of real-number expressions via
+/// A machine is compiled from an [`ExpressionBuilder`] via
 /// [`MachineBuilder::build`], and can then be evaluated at specific input
-/// points using [`Machine::apply`]. Returns an opaque machine that can
-/// be passed to [`Machine::apply`] to evaluate the compiled real expression
-/// on a specific point.
+/// points using [`Machine::apply`].
 ///
-/// Internally, a machine converts expressions into a simple register machine.
-/// Compilation is fairly slow, so the ideal use case is to compile a function
-/// once and then apply it to multiple points.
+/// Internally, a machine is a simple register machine. Compilation is fairly
+/// slow, so the ideal use case is to compile a function once and then apply it
+/// to multiple points.
 ///
-/// If more than one expression is provided, common subexpressions will be
-/// identified and eliminated during compilation. This makes Rival ideal for
-/// evaluating large families of related expressions, a feature that is
-/// heavily used in [Herbie](https://herbie.uwplse.org). Note that each
-/// expression can use a different discretization.
+/// Common subexpressions are identified and eliminated as expressions are
+/// built, so a shared expression graph stays compact. This makes Rival ideal
+/// for evaluating large families of related expressions, a feature that is
+/// heavily used in [Herbie](https://herbie.uwplse.org). Note that each output
+/// can use a different discretization.
 pub struct Machine<D: Discretization> {
     pub(crate) disc: D,
 
@@ -111,14 +103,7 @@ pub(crate) struct PathOutcome {
 
 /// Builder for constructing a [`Machine`] with custom parameters.
 ///
-/// # Example
-///
-/// ```
-/// let machine = MachineBuilder::new(my_discretization)
-///     .min_precision(53)
-///     .max_precision(10_000)
-///     .build(exprs, vars);
-/// ```
+/// See the [crate documentation](crate) for an example.
 pub struct MachineBuilder<D: Discretization> {
     disc: D,
     min_precision: u32,
@@ -193,39 +178,27 @@ impl<D: Discretization> MachineBuilder<D> {
         self
     }
 
-    /// Compile expressions into a machine.
+    /// Compile the expressions selected by `outputs` into a machine.
     ///
-    /// `exprs` is a list of real-number expressions, using [`Expr`](super::ast::Expr).
-    /// `vars` is a list of the free variables of these expressions.
-    /// An empty `vars` list can be provided if the expressions
-    /// have no free variables.
+    /// Every output must have been created by `expressions`.
     ///
     /// Returns a [`Machine`], an opaque type that can be passed to
     /// [`Machine::apply`] to evaluate the compiled real expressions
     /// on a specific point.
-    pub fn build(self, exprs: Vec<Expr>, vars: Vec<String>) -> Machine<D> {
-        // Optimize and lower expressions to instructions.
-        let optimized_exprs = exprs.into_iter().map(ops::optimize_expr).collect();
-        let (instructions_map, roots) = lower(optimized_exprs, &vars);
-        let var_count = vars.len();
-        let instruction_count = instructions_map.len();
+    pub fn build(self, expressions: &ExpressionBuilder, outputs: &[Expression]) -> Machine<D> {
+        let program = expressions.finish(outputs);
+        let var_count = program.arguments.len();
+        let instruction_count = program.instructions.len();
         let register_count = var_count + instruction_count;
 
         let mut registers = vec![Ival::zero(self.max_precision); register_count];
-
-        let instructions: Vec<Instruction> = instructions_map
-            .into_iter()
-            .map(|(data, register)| Instruction {
-                out: register,
-                data,
-            })
-            .collect();
+        let instructions = program.instructions;
 
         let mut best_known_precisions = vec![0u32; instruction_count];
         let initial_precisions = make_initial_precisions(
             &instructions,
             var_count,
-            &roots,
+            &program.outputs,
             &self.disc,
             self.base_tuning_precision,
             self.ampl_tuning_bits,
@@ -242,14 +215,14 @@ impl<D: Discretization> MachineBuilder<D> {
         let default_hint = vec![Hint::Execute; instruction_count];
         let precisions = vec![0u32; instruction_count];
         let repeats = vec![false; instruction_count];
-        let mut output_distance = vec![false; roots.len()];
+        let mut output_distance = vec![false; program.outputs.len()];
         output_distance.fill(false);
 
         Machine {
             disc: self.disc,
-            arguments: vars,
+            arguments: program.arguments,
             instructions,
-            outputs: roots,
+            outputs: program.outputs,
             initial_repeats,
             initial_precisions,
             best_known_precisions,
@@ -432,27 +405,6 @@ impl PathOutcome {
             converged: true,
         }
     }
-}
-
-/// Lower optimized expressions into instructions with common subexpression elimination.
-pub(crate) fn lower(
-    exprs: Vec<Expr>,
-    vars: &[String],
-) -> (IndexMap<InstructionData, usize>, Vec<usize>) {
-    let mut current_reg = vars.len();
-    let mut nodes: IndexMap<InstructionData, usize> = IndexMap::new();
-    let var_lookup: HashMap<&str, usize> = vars
-        .iter()
-        .enumerate()
-        .map(|(idx, name)| (name.as_str(), idx))
-        .collect();
-
-    let roots: Vec<usize> = exprs
-        .iter()
-        .map(|expr| ops::lower_expr(expr, &var_lookup, &mut nodes, &mut current_reg))
-        .collect();
-
-    (nodes, roots)
 }
 
 /// Determine initial precision targets for each instruction.

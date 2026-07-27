@@ -3,7 +3,7 @@ use crate::mpfr::{mpfr_e, mpfr_pi};
 use rug::float::Round;
 
 impl Ival {
-    /// Set this interval to contain π.
+    /// Set this interval to contain pi.
     pub fn set_pi(&mut self) {
         mpfr_pi(self.lo.as_float_mut(), Round::Down);
         mpfr_pi(self.hi.as_float_mut(), Round::Up);
@@ -12,7 +12,7 @@ impl Ival {
         self.err = ErrorFlags::none();
     }
 
-    /// Set this interval to contain *e*.
+    /// Set this interval to contain e.
     pub fn set_e(&mut self) {
         mpfr_e(self.lo.as_float_mut(), Round::Down);
         mpfr_e(self.hi.as_float_mut(), Round::Up);

@@ -18,7 +18,7 @@
 //! and then apply that machine to specific inputs.
 //!
 //! ```no_run
-//! use rival::{Expr, MachineBuilder, Ival};
+//! use rival::{ExpressionBuilder, MachineBuilder, Ival};
 //! use rug::Float;
 //!
 //! struct Fp64Disc;
@@ -29,21 +29,17 @@
 //! }
 //! impl Clone for Fp64Disc { fn clone(&self) -> Self { Fp64Disc } }
 //!
-//! let expr = Expr::Sub(
-//!     Box::new(Expr::Sin(Box::new(Expr::Var("x".into())))),
-//!     Box::new(Expr::Sub(
-//!         Box::new(Expr::Var("x".into())),
-//!         Box::new(Expr::Div(
-//!             Box::new(Expr::Pow(
-//!                 Box::new(Expr::Var("x".into())),
-//!                 Box::new(Expr::Literal(Float::with_val(53, 3))),
-//!             )),
-//!             Box::new(Expr::Literal(Float::with_val(53, 6))),
-//!         )),
-//!     )),
-//! );
+//! let mut expressions = ExpressionBuilder::new(["x"]);
+//! let x = expressions.variable("x").unwrap();
+//! let three = expressions.literal(Float::with_val(53, 3));
+//! let six = expressions.literal(Float::with_val(53, 6));
+//! let sin_x = expressions.sin(x);
+//! let x_cubed = expressions.pow(x, three);
+//! let correction = expressions.div(x_cubed, six);
+//! let approximation = expressions.sub(x, correction);
+//! let error = expressions.sub(sin_x, approximation);
 //!
-//! let machine = MachineBuilder::new(Fp64Disc).build(vec![expr], vec!["x".into()]);
+//! let machine = MachineBuilder::new(Fp64Disc).build(&expressions, &[error]);
 //! ```
 //!
 //! Rival works by evaluating the expression with high-precision interval
@@ -73,7 +69,7 @@ mod eval;
 mod interval;
 mod mpfr;
 
-pub use eval::ast::Expr;
+pub use eval::builder::{Expression, ExpressionBuilder};
 pub use eval::machine::{Discretization, Hint, Machine, MachineBuilder};
 pub use eval::profile::Execution;
 pub use eval::run::RivalError;

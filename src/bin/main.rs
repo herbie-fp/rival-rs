@@ -1,5 +1,7 @@
 use ascii_table::{Align, AsciiTable};
-use rival::{Discretization, Execution, Expr, Ival, MachineBuilder, RivalError};
+use rival::{
+    Discretization, Execution, Expression, ExpressionBuilder, Ival, MachineBuilder, RivalError,
+};
 use rug::{Assign, Float, Rational};
 use std::env;
 use std::fmt::Display;
@@ -127,21 +129,21 @@ fn parse_values(s: &str) -> Result<Vec<String>, String> {
     }
 }
 
-fn sexpr_to_expr(sexpr: SExpr, vars: &[String]) -> Result<Expr, String> {
+fn sexpr_to_expr(sexpr: SExpr, builder: &mut ExpressionBuilder) -> Result<Expression, String> {
     match sexpr {
         SExpr::Atom(s) => {
-            if vars.contains(&s) {
-                return Ok(Expr::Var(s));
+            if let Some(variable) = builder.variable(&s) {
+                return Ok(variable);
             }
             if let Ok(rat) = s.parse::<Rational>() {
-                return Ok(Expr::Rational(rat));
+                return Ok(builder.rational(rat));
             }
             if let Ok(f) = Float::parse(&s) {
-                return Ok(Expr::Literal(Float::with_val(1024, f)));
+                return Ok(builder.literal(Float::with_val(1024, f)));
             }
             match s.to_uppercase().as_str() {
-                "PI" => Ok(Expr::Pi),
-                "E" => Ok(Expr::E),
+                "PI" => Ok(builder.pi()),
+                "E" => Ok(builder.e()),
                 _ => Err(format!("Unknown atom: {}", s)),
             }
         }
@@ -156,96 +158,57 @@ fn sexpr_to_expr(sexpr: SExpr, vars: &[String]) -> Result<Expr, String> {
             let args: Result<Vec<_>, _> = items
                 .into_iter()
                 .skip(1)
-                .map(|item| sexpr_to_expr(item, vars))
+                .map(|item| sexpr_to_expr(item, builder))
                 .collect();
             let args = args?;
             match (op.as_str(), args.len()) {
-                ("+", 2) => Ok(Expr::Add(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("-", 1) => Ok(Expr::Neg(Box::new(args[0].clone()))),
-                ("-", 2) => Ok(Expr::Sub(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("*", 2) => Ok(Expr::Mul(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("/", 2) => Ok(Expr::Div(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("pow", 2) => Ok(Expr::Pow(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("sqrt", 1) => Ok(Expr::Sqrt(Box::new(args[0].clone()))),
-                ("cbrt", 1) => Ok(Expr::Cbrt(Box::new(args[0].clone()))),
-                ("exp", 1) => Ok(Expr::Exp(Box::new(args[0].clone()))),
-                ("exp2", 1) => Ok(Expr::Exp2(Box::new(args[0].clone()))),
-                ("expm1", 1) => Ok(Expr::Expm1(Box::new(args[0].clone()))),
-                ("log", 1) => Ok(Expr::Log(Box::new(args[0].clone()))),
-                ("log2", 1) => Ok(Expr::Log2(Box::new(args[0].clone()))),
-                ("log10", 1) => Ok(Expr::Log10(Box::new(args[0].clone()))),
-                ("log1p", 1) => Ok(Expr::Log1p(Box::new(args[0].clone()))),
-                ("sin", 1) => Ok(Expr::Sin(Box::new(args[0].clone()))),
-                ("cos", 1) => Ok(Expr::Cos(Box::new(args[0].clone()))),
-                ("tan", 1) => Ok(Expr::Tan(Box::new(args[0].clone()))),
-                ("asin", 1) => Ok(Expr::Asin(Box::new(args[0].clone()))),
-                ("acos", 1) => Ok(Expr::Acos(Box::new(args[0].clone()))),
-                ("atan", 1) => Ok(Expr::Atan(Box::new(args[0].clone()))),
-                ("sinh", 1) => Ok(Expr::Sinh(Box::new(args[0].clone()))),
-                ("cosh", 1) => Ok(Expr::Cosh(Box::new(args[0].clone()))),
-                ("tanh", 1) => Ok(Expr::Tanh(Box::new(args[0].clone()))),
-                ("asinh", 1) => Ok(Expr::Asinh(Box::new(args[0].clone()))),
-                ("acosh", 1) => Ok(Expr::Acosh(Box::new(args[0].clone()))),
-                ("atanh", 1) => Ok(Expr::Atanh(Box::new(args[0].clone()))),
-                ("fabs", 1) => Ok(Expr::Fabs(Box::new(args[0].clone()))),
-                ("neg", 1) => Ok(Expr::Neg(Box::new(args[0].clone()))),
-                ("hypot", 2) => Ok(Expr::Hypot(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("atan2", 2) => Ok(Expr::Atan2(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("fmin", 2) => Ok(Expr::Fmin(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("fmax", 2) => Ok(Expr::Fmax(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("fmod", 2) => Ok(Expr::Fmod(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("remainder", 2) => Ok(Expr::Remainder(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("copysign", 2) => Ok(Expr::Copysign(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("fdim", 2) => Ok(Expr::Fdim(
-                    Box::new(args[0].clone()),
-                    Box::new(args[1].clone()),
-                )),
-                ("erf", 1) => Ok(Expr::Erf(Box::new(args[0].clone()))),
-                ("erfc", 1) => Ok(Expr::Erfc(Box::new(args[0].clone()))),
-                ("lgamma", 1) => Ok(Expr::Lgamma(Box::new(args[0].clone()))),
-                ("tgamma", 1) => Ok(Expr::Tgamma(Box::new(args[0].clone()))),
-                ("floor", 1) => Ok(Expr::Floor(Box::new(args[0].clone()))),
-                ("ceil", 1) => Ok(Expr::Ceil(Box::new(args[0].clone()))),
-                ("round", 1) => Ok(Expr::Round(Box::new(args[0].clone()))),
-                ("trunc", 1) => Ok(Expr::Trunc(Box::new(args[0].clone()))),
-                ("rint", 1) => Ok(Expr::Rint(Box::new(args[0].clone()))),
-                ("logb", 1) => Ok(Expr::Logb(Box::new(args[0].clone()))),
+                ("+", 2) => Ok(builder.add(args[0], args[1])),
+                ("-", 1) => Ok(builder.neg(args[0])),
+                ("-", 2) => Ok(builder.sub(args[0], args[1])),
+                ("*", 2) => Ok(builder.mul(args[0], args[1])),
+                ("/", 2) => Ok(builder.div(args[0], args[1])),
+                ("pow", 2) => Ok(builder.pow(args[0], args[1])),
+                ("sqrt", 1) => Ok(builder.sqrt(args[0])),
+                ("cbrt", 1) => Ok(builder.cbrt(args[0])),
+                ("exp", 1) => Ok(builder.exp(args[0])),
+                ("exp2", 1) => Ok(builder.exp2(args[0])),
+                ("expm1", 1) => Ok(builder.expm1(args[0])),
+                ("log", 1) => Ok(builder.log(args[0])),
+                ("log2", 1) => Ok(builder.log2(args[0])),
+                ("log10", 1) => Ok(builder.log10(args[0])),
+                ("log1p", 1) => Ok(builder.log1p(args[0])),
+                ("sin", 1) => Ok(builder.sin(args[0])),
+                ("cos", 1) => Ok(builder.cos(args[0])),
+                ("tan", 1) => Ok(builder.tan(args[0])),
+                ("asin", 1) => Ok(builder.asin(args[0])),
+                ("acos", 1) => Ok(builder.acos(args[0])),
+                ("atan", 1) => Ok(builder.atan(args[0])),
+                ("sinh", 1) => Ok(builder.sinh(args[0])),
+                ("cosh", 1) => Ok(builder.cosh(args[0])),
+                ("tanh", 1) => Ok(builder.tanh(args[0])),
+                ("asinh", 1) => Ok(builder.asinh(args[0])),
+                ("acosh", 1) => Ok(builder.acosh(args[0])),
+                ("atanh", 1) => Ok(builder.atanh(args[0])),
+                ("fabs", 1) => Ok(builder.fabs(args[0])),
+                ("neg", 1) => Ok(builder.neg(args[0])),
+                ("hypot", 2) => Ok(builder.hypot(args[0], args[1])),
+                ("atan2", 2) => Ok(builder.atan2(args[0], args[1])),
+                ("fmin", 2) => Ok(builder.fmin(args[0], args[1])),
+                ("fmax", 2) => Ok(builder.fmax(args[0], args[1])),
+                ("fmod", 2) => Ok(builder.fmod(args[0], args[1])),
+                ("remainder", 2) => Ok(builder.remainder(args[0], args[1])),
+                ("copysign", 2) => Ok(builder.copysign(args[0], args[1])),
+                ("fdim", 2) => Ok(builder.fdim(args[0], args[1])),
+                ("erf", 1) => Ok(builder.erf(args[0])),
+                ("erfc", 1) => Ok(builder.erfc(args[0])),
+                ("lgamma", 1) => Ok(builder.lgamma(args[0])),
+                ("tgamma", 1) => Ok(builder.tgamma(args[0])),
+                ("floor", 1) => Ok(builder.floor(args[0])),
+                ("ceil", 1) => Ok(builder.ceil(args[0])),
+                ("round", 1) => Ok(builder.round(args[0])),
+                ("trunc", 1) => Ok(builder.trunc(args[0])),
+                ("rint", 1) => Ok(builder.rint(args[0])),
+                ("logb", 1) => Ok(builder.logb(args[0])),
                 (op, _) => Err(format!("Unknown or invalid arity for operator: {}", op)),
             }
         }
@@ -379,7 +342,8 @@ fn main() {
         std::process::exit(1);
     });
 
-    let expr = sexpr_to_expr(sexpr, &vars).unwrap_or_else(|e| {
+    let mut expressions = ExpressionBuilder::new(vars.clone());
+    let expr = sexpr_to_expr(sexpr, &mut expressions).unwrap_or_else(|e| {
         eprintln!("Error converting expression: {}", e);
         std::process::exit(1);
     });
@@ -387,7 +351,7 @@ fn main() {
     let mut machine = MachineBuilder::new(Fp64Discretization)
         .enable_profiling(true)
         .max_precision(10000)
-        .build(vec![expr], vars);
+        .build(&expressions, &[expr]);
 
     let arg_prec = machine.argument_precision();
     let arg_ivals: Vec<Ival> = values

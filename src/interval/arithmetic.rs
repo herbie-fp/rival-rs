@@ -133,7 +133,7 @@ impl Ival {
         self.fmax_assign(&diff, &zero_ival);
     }
 
-    /// Compute the interval Euclidean distance `hypot(x, y) = sqrt(x² + y²)`.
+    /// Compute the interval Euclidean distance `hypot(x, y) = sqrt(x^2 + y^2)`.
     pub fn hypot_assign(&mut self, x: &Ival, y: &Ival) {
         let mut abs_x = Ival::zero(self.prec());
         let mut abs_y = Ival::zero(self.prec());

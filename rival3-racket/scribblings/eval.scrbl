@@ -137,17 +137,19 @@ Returns a @racket[rival-machine?], an opaque type that can be passed to
   on a specific point.
 }
 
-Internally, @racket[rival-compile] converts the @racket[exprs] into a
-simple register machine. @racket[rival-compile] is fairly slow, so the
-ideal use case for Rival is to compile a function once and then apply
-it to multiple points.
+Internally, @racket[rival-compile] translates the @racket[exprs]
+directly into a shared register machine. Instructions are reused as
+expressions are translated, so a compact expression DAG remains compact
+during compilation. @racket[rival-compile] is fairly slow, so the ideal
+use case for Rival is to compile a function once and then apply it to
+multiple points.
 
-If more than one expression is provided as an input to
-@racket[rival-compile], common subexpressions will be identified and
-eliminated during compilation. This makes Rival ideal for evaluting
-large families of related expressions, a feature that is heavily used
-in @hyperlink["https://herbie.uwplse.org"]{Herbie}. Note that each
-expression can use a different discretization.
+Common subexpressions within and across the expressions passed to
+@racket[rival-compile] are identified and eliminated during compilation.
+This makes Rival ideal for evaluating large families of related
+expressions, a feature that is heavily used in
+@hyperlink["https://herbie.uwplse.org"]{Herbie}. Note that each expression
+can use a different discretization.
 
 @section{Evaluating Real Expressions}
 

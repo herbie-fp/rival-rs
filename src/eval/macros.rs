@@ -1,5 +1,5 @@
 //! Macro for defining interval operations and generated helpers.
-//! Provides enums, dispatch, optimization, and path reduction wiring.
+//! Provides enums, dispatch, amplification bounds, and path reduction wiring.
 //! TODO: Split up this macro to make it easier to use/extend.
 macro_rules! def_ops {
     (
@@ -12,7 +12,6 @@ macro_rules! def_ops {
                     method: $unary_method:ident,
                     bounds: $unary_bounds:expr
                     $(, path_reduce: $unary_path_reduce:expr )?
-                    $(, optimize: $unary_optimize:expr )?
                     $(,)?
                 }
             ),* $(,)?
@@ -23,7 +22,6 @@ macro_rules! def_ops {
                     method: $unary_param_method:ident,
                     bounds: $unary_param_bounds:expr
                     $(, path_reduce: $unary_param_path_reduce:expr )?
-                    $(, optimize: $unary_param_optimize:expr )?
                     $(,)?
                 }
             ),* $(,)?
@@ -34,7 +32,6 @@ macro_rules! def_ops {
                     method: $binary_method:ident,
                     bounds: $binary_bounds:expr
                     $(, path_reduce: $binary_path_reduce:expr )?
-                    $(, optimize: $binary_optimize:expr )?
                     $(,)?
                 }
             ),* $(,)?
@@ -45,93 +42,11 @@ macro_rules! def_ops {
                     method: $ternary_method:ident,
                     bounds: $ternary_bounds:expr
                     $(, path_reduce: $ternary_path_reduce:expr )?
-                    $(, optimize: $ternary_optimize:expr )?
                     $(,)?
                 }
             ),* $(,)?
         } $(,)?
     ) => {
-        /// High-level expression AST for real-number computation.
-        ///
-        /// Rival supports a simple language of real-number expressions containing
-        /// variables, rational literals, common mathematical functions, and
-        /// common mathematical constants:
-        ///
-        /// ```text
-        /// Expr = variable
-        ///      | literal
-        ///      | (constant)
-        ///      | (operator Expr ...)
-        ///
-        /// constant = Pi | E
-        ///
-        /// operator = Add | Sub | Mul | Div | Fma | Fabs
-        ///          | Sqrt | Cbrt | Hypot
-        ///          | Exp | Exp2 | Expm1 | Pow
-        ///          | Log | Log2 | Log10 | Log1p | Logb
-        ///          | Sin | Cos | Tan | Asin | Acos | Atan | Atan2
-        ///          | Sinh | Cosh | Tanh | Asinh | Acosh | Atanh
-        ///          | Erf | Erfc | Lgamma | Tgamma
-        ///          | Fmod | Remainder | Rint | Round | Ceil | Floor | Trunc
-        ///          | Fmin | Fmax | Copysign | Fdim
-        ///          | Lt | Le | Gt | Ge | Eq | Ne
-        ///          | If | And | Or | Not
-        ///          | Assert | Error
-        /// ```
-        ///
-        /// Expressions largely follow the semantics of `math.h`, not Racket,
-        /// when it comes to, for example, the order of arguments to `atan2`
-        /// or the naming of the exponential function.
-        ///
-        /// Some inputs are invalid to some operations, such as division by zero,
-        /// square roots of negative numbers, and similar. For `Pow`, Rival
-        /// considers `pow(0, x)` valid for non-negative `x`, and `pow(x, y)`
-        /// invalid for negative `x` and non-integer `y`. In general these
-        /// conventions again follow those in `math.h`. Colloquially we say
-        /// that these expressions "throw" on invalid points, though note
-        /// that internally Rival uses error intervals to soundly track
-        /// whether an input is invalid or not.
-        ///
-        /// Expressions that mix boolean and real-number operations must
-        /// type-check in the expected way, and variables must have consistent
-        /// types. Rival does not perform typechecking; that is a user
-        /// responsibility, and Rival may return undefined results if passed
-        /// ill-typed formulas.
-        ///
-        /// The `Assert` and `Error` variants need additional explanation;
-        /// these control the definition of a "valid" input to an expression.
-        /// The `Assert` function takes in a boolean input and returns a
-        /// boolean output. If the input is false, `Assert` throws. Its
-        /// output is always true. `Error` has the opposite behavior. This
-        /// function never throws, and instead returns true if its argument
-        /// throws and false if it doesn't.
-        /// `Assert` and `Error` can be used to model constructs like
-        /// preconditions, tests, try/catch blocks, and others.
-        #[derive(Debug, Clone, PartialEq)]
-        pub enum Expr {
-            /// Variable reference by name.
-            Var(String),
-            /// Floating-point literal value.
-            Literal(rug::Float),
-            /// Exact rational value.
-            Rational(rug::Rational),
-
-            // Constants.
-            $( $const_name, )*
-
-            // Unary operations.
-            $( $unary_name(Box<Expr>), )*
-
-            // Unary parameterized operations (take a u64 parameter and an expression).
-            $( $unary_param_name(u64, Box<Expr>), )*
-
-            // Binary operations.
-            $( $binary_name(Box<Expr>, Box<Expr>), )*
-
-            // Ternary operations.
-            $( $ternary_name(Box<Expr>, Box<Expr>, Box<Expr>), )*
-        }
-
         /// Unary instruction operations.
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum UnaryOp {
@@ -336,42 +251,6 @@ macro_rules! def_ops {
             }
         }
 
-        /// Optimize unary operation.
-        pub fn optimize_unary(op: UnaryOp, arg: Expr) -> Expr {
-            match op {
-                $(
-                    UnaryOp::$unary_name => def_ops!(@optimize_unary_impl $unary_name, arg ; $( $unary_optimize )?),
-                )*
-            }
-        }
-
-        /// Optimize binary operation.
-        pub fn optimize_binary(op: BinaryOp, lhs: Expr, rhs: Expr) -> Expr {
-            match op {
-                $(
-                    BinaryOp::$binary_name => def_ops!(@optimize_binary_impl $binary_name, lhs, rhs ; $( $binary_optimize )?),
-                )*
-            }
-        }
-
-        /// Optimize ternary operation.
-        pub fn optimize_ternary(op: TernaryOp, arg1: Expr, arg2: Expr, arg3: Expr) -> Expr {
-            match op {
-                $(
-                    TernaryOp::$ternary_name => def_ops!(@optimize_ternary_impl $ternary_name, arg1, arg2, arg3 ; $( $ternary_optimize )?),
-                )*
-            }
-        }
-
-        /// Optimize unary parameterized operation.
-        pub fn optimize_unary_param(op: UnaryParamOp, param: u64, arg: Expr) -> Expr {
-            match op {
-                $(
-                    UnaryParamOp::$unary_param_name => def_ops!(@optimize_unary_param_impl $unary_param_name, param, arg ; $( $unary_param_optimize )?),
-                )*
-            }
-        }
-
         /// Execute unary operation on interval.
         pub fn execute_unary(op: UnaryOp, output: &mut Ival, input: &Ival) {
             match op {
@@ -417,163 +296,6 @@ macro_rules! def_ops {
             }
         }
 
-        /// Lower expression to instruction, returns register index.
-        pub fn lower_expr(
-            expr: &Expr,
-            var_lookup: &std::collections::HashMap<&str, usize>,
-            nodes: &mut indexmap::IndexMap<$crate::eval::instructions::InstructionData, usize>,
-            current_reg: &mut usize,
-        ) -> usize {
-            // Add instruction with common subexpression elimination.
-            fn add_instruction(
-                data: $crate::eval::instructions::InstructionData,
-                nodes: &mut indexmap::IndexMap<$crate::eval::instructions::InstructionData, usize>,
-                current_reg: &mut usize,
-            ) -> usize {
-                *nodes.entry(data).or_insert_with(|| {
-                    let idx = *current_reg;
-                    *current_reg += 1;
-                    idx
-                })
-            }
-
-            match expr {
-                Expr::Var(name) => *var_lookup.get(name.as_str()).expect(&format!("Unknown variable: {}", name)),
-                Expr::Literal(value) => add_instruction($crate::eval::instructions::InstructionData::literal(value.clone()), nodes, current_reg),
-                Expr::Rational(val) => add_instruction(
-                    $crate::eval::instructions::InstructionData::rational(val.clone()),
-                    nodes,
-                    current_reg,
-                ),
-
-                // Constants.
-                $(
-                    Expr::$const_name => add_instruction(
-                        $crate::eval::instructions::InstructionData::constant(ConstantOp::$const_name),
-                        nodes,
-                        current_reg,
-                    ),
-                )*
-
-                // Unary operations.
-                $(
-                    Expr::$unary_name(arg) => {
-                        let arg_reg = lower_expr(arg, var_lookup, nodes, current_reg);
-                        add_instruction($crate::eval::instructions::InstructionData::unary(UnaryOp::$unary_name, arg_reg), nodes, current_reg)
-                    }
-                )*
-
-                // Unary parameterized operations.
-                $(
-                    Expr::$unary_param_name(param, arg) => {
-                        let arg_reg = lower_expr(arg, var_lookup, nodes, current_reg);
-                        add_instruction($crate::eval::instructions::InstructionData::unary_param(UnaryParamOp::$unary_param_name, *param, arg_reg), nodes, current_reg)
-                    }
-                )*
-
-                // Binary operations.
-                $(
-                    Expr::$binary_name(lhs, rhs) => {
-                        let lhs_reg = lower_expr(lhs, var_lookup, nodes, current_reg);
-                        let rhs_reg = lower_expr(rhs, var_lookup, nodes, current_reg);
-                        add_instruction($crate::eval::instructions::InstructionData::binary(BinaryOp::$binary_name, lhs_reg, rhs_reg), nodes, current_reg)
-                    }
-                )*
-
-                // Ternary operations.
-                $(
-                    Expr::$ternary_name(arg1, arg2, arg3) => {
-                        let reg1 = lower_expr(arg1, var_lookup, nodes, current_reg);
-                        let reg2 = lower_expr(arg2, var_lookup, nodes, current_reg);
-                        let reg3 = lower_expr(arg3, var_lookup, nodes, current_reg);
-                        add_instruction($crate::eval::instructions::InstructionData::ternary(TernaryOp::$ternary_name, reg1, reg2, reg3), nodes, current_reg)
-                    }
-                )*
-            }
-        }
-
-        /// Optimize expression for numerical stability.
-        pub fn optimize_expr(expr: Expr) -> Expr {
-            // Optimize each node once (top-down), then recurse into children
-            // without re-optimizing the parent after children change.
-            // TODO: might not the best, dig deeper
-            let optimized = match expr {
-                $(
-                    Expr::$unary_name(x) => optimize_unary(UnaryOp::$unary_name, *x),
-                )*
-
-                $(
-                    Expr::$unary_param_name(param, x) => optimize_unary_param(UnaryParamOp::$unary_param_name, param, *x),
-                )*
-
-                $(
-                    Expr::$binary_name(x, y) => optimize_binary(BinaryOp::$binary_name, *x, *y),
-                )*
-
-                $(
-                    Expr::$ternary_name(x, y, z) => optimize_ternary(TernaryOp::$ternary_name, *x, *y, *z),
-                )*
-
-                // Leaves.
-                leaf @ (Expr::Var(_) | Expr::Literal(_) | Expr::Rational(_) $( | Expr::$const_name )*) => leaf,
-            };
-
-            match optimized {
-                $(
-                    Expr::$unary_name(x) => Expr::$unary_name(Box::new(optimize_expr(*x))),
-                )*
-
-                $(
-                    Expr::$unary_param_name(param, x) => Expr::$unary_param_name(param, Box::new(optimize_expr(*x))),
-                )*
-
-                $(
-                    Expr::$binary_name(x, y) => Expr::$binary_name(Box::new(optimize_expr(*x)), Box::new(optimize_expr(*y))),
-                )*
-
-                $(
-                    Expr::$ternary_name(x, y, z) => Expr::$ternary_name(Box::new(optimize_expr(*x)), Box::new(optimize_expr(*y)), Box::new(optimize_expr(*z))),
-                )*
-
-                leaf @ (Expr::Var(_) | Expr::Literal(_) | Expr::Rational(_) $( | Expr::$const_name )*) => leaf,
-            }
-        }
-    };
-
-    // Helper: Unary optimization - no optimizer specified.
-    (@optimize_unary_impl $op:ident, $arg:expr ; ) => {
-        Expr::$op(Box::new($arg))
-    };
-    // Helper: Unary optimization - custom optimizer specified.
-    (@optimize_unary_impl $op:ident, $arg:expr ; $optimizer:expr) => {
-        $optimizer($arg)
-    };
-
-    // Helper: Binary optimization - no optimizer specified.
-    (@optimize_binary_impl $op:ident, $lhs:expr, $rhs:expr ; ) => {
-        Expr::$op(Box::new($lhs), Box::new($rhs))
-    };
-    // Helper: Binary optimization - custom optimizer specified.
-    (@optimize_binary_impl $op:ident, $lhs:expr, $rhs:expr ; $optimizer:expr) => {
-        $optimizer($lhs, $rhs)
-    };
-
-    // Helper: Ternary optimization - no optimizer specified.
-    (@optimize_ternary_impl $op:ident, $arg1:expr, $arg2:expr, $arg3:expr ; ) => {
-        Expr::$op(Box::new($arg1), Box::new($arg2), Box::new($arg3))
-    };
-    // Helper: Ternary optimization - custom optimizer specified.
-    (@optimize_ternary_impl $op:ident, $arg1:expr, $arg2:expr, $arg3:expr ; $optimizer:expr) => {
-        $optimizer($arg1, $arg2, $arg3)
-    };
-
-    // Helper: Unary param optimization - no optimizer specified.
-    (@optimize_unary_param_impl $op:ident, $param:expr, $arg:expr ; ) => {
-        Expr::$op($param, Box::new($arg))
-    };
-    // Helper: Unary param optimization - custom optimizer specified.
-    (@optimize_unary_param_impl $op:ident, $param:expr, $arg:expr ; $optimizer:expr) => {
-        $optimizer($param, $arg)
     };
 
     // Helper: Path reduction - standard behavior if not specified.
