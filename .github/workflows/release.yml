@@ -25,6 +25,13 @@ jobs:
             lib_name: librival3_ffi.so
             artifact_name: native-x86_64-linux
             lib_dir: rival3-ffi/target/x86_64-unknown-linux-gnu/release
+            rust_target: x86_64-unknown-linux-gnu
+
+          - os: ubuntu-24.04-arm
+            lib_name: librival3_ffi.so
+            artifact_name: native-aarch64-linux
+            lib_dir: rival3-ffi/target/aarch64-unknown-linux-gnu/release
+            rust_target: aarch64-unknown-linux-gnu
 
           - os: macos-latest
             lib_name: librival3_ffi.dylib
@@ -78,7 +85,7 @@ jobs:
       # Uses cargo-zigbuild for glibc
       - name: Build rival3-ffi (Linux)
         if: runner.os == 'Linux'
-        run: cargo zigbuild --release --manifest-path=rival3-ffi/Cargo.toml --target x86_64-unknown-linux-gnu.2.17
+        run: cargo zigbuild --release --manifest-path=rival3-ffi/Cargo.toml --target ${{ matrix.rust_target }}.2.17
 
       - name: Build rival3-ffi (macOS)
         if: runner.os == 'macOS'
@@ -119,12 +126,16 @@ jobs:
           mkdir -p rival3-racket/private/native/win32/x86_64
           mkdir -p rival3-racket/private/native/x86_64-linux
           mkdir -p rival3-racket/private/native/x86_64-linux-natipkg
+          mkdir -p rival3-racket/private/native/aarch64-linux
+          mkdir -p rival3-racket/private/native/aarch64-linux-natipkg
           mkdir -p rival3-racket/private/native/aarch64-macosx
           mkdir -p rival3-racket/private/native/x86_64-macosx
 
           cp native-artifacts/native-win32-x86_64/rival3_ffi.dll rival3-racket/private/native/win32/x86_64/
           cp native-artifacts/native-x86_64-linux/librival3_ffi.so rival3-racket/private/native/x86_64-linux/
           cp native-artifacts/native-x86_64-linux/librival3_ffi.so rival3-racket/private/native/x86_64-linux-natipkg/
+          cp native-artifacts/native-aarch64-linux/librival3_ffi.so rival3-racket/private/native/aarch64-linux/
+          cp native-artifacts/native-aarch64-linux/librival3_ffi.so rival3-racket/private/native/aarch64-linux-natipkg/
           cp native-artifacts/native-aarch64-macosx/librival3_ffi.dylib rival3-racket/private/native/aarch64-macosx/
           cp native-artifacts/native-x86_64-macosx/librival3_ffi.dylib rival3-racket/private/native/x86_64-macosx/
 
@@ -150,20 +161,27 @@ jobs:
         include:
           - os: windows-latest
             arch: x64
+            racket_version: 8.18
           - os: ubuntu-latest
             arch: x64
+            racket_version: 8.18
+          - os: ubuntu-24.04-arm
+            arch: arm64
+            racket_version: current
           - os: macos-latest
             arch: arm64
+            racket_version: 8.18
           - os: macos-15-intel
             arch: x64
+            racket_version: 8.18
 
     steps:
       - uses: actions/checkout@v5
 
       - name: Install Racket
-        uses: Bogdanp/setup-racket@v1.14
+        uses: Bogdanp/setup-racket@v1.15
         with:
-          version: 8.18
+          version: ${{ matrix.racket_version }}
           architecture: ${{ matrix.arch }}
 
       - name: Download fat package artifact
