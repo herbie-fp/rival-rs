@@ -9,6 +9,16 @@ use crate::eval::{
 };
 use crate::interval::Ival;
 
+/// Selects when an invalid output makes an evaluation invalid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OutputPolicy {
+    /// Any totally invalid output makes the whole evaluation invalid.
+    RequireAll,
+    /// Only a totally invalid *set* of outputs makes the evaluation invalid.
+    /// Individual invalid outputs are returned in place.
+    AllowPartial,
+}
+
 impl<D: Discretization> Machine<D> {
     /// Evaluate the compiled real expressions on an input point
     /// represented as a slice of intervals.
@@ -24,24 +34,23 @@ impl<D: Discretization> Machine<D> {
     ///
     /// `max_iterations` sets the maximum number of re-evaluation
     /// iterations before giving up.
-    /// If `require_all_outputs` is true, any totally invalid output makes
-    /// the whole call invalid; otherwise, only an all-invalid output vector does.
     ///
     /// # Errors
     ///
     /// Returns [`RivalError::InvalidInput`] according to the selected
-    /// `require_all_outputs` policy.
+    /// [`OutputPolicy`].
     /// Returns [`RivalError::Unsamplable`] if Rival is unable to
     /// evaluate at least one expression.
     ///
-    /// When all outputs are not required, totally invalid outputs are returned
-    /// in place, while every non-error output must still be correctly rounded.
+    /// Under [`OutputPolicy::AllowPartial`], totally invalid outputs are
+    /// returned in place, while every non-error output must still be
+    /// correctly rounded.
     pub fn apply(
         &mut self,
         args: &[Ival],
         hint: Option<&[Hint]>,
         max_iterations: usize,
-        require_all_outputs: bool,
+        policy: OutputPolicy,
     ) -> Result<Vec<Ival>, RivalError> {
         self.load_arguments(args);
         let hint_storage;
@@ -53,7 +62,7 @@ impl<D: Discretization> Machine<D> {
         };
 
         for iteration in 0..max_iterations {
-            if let Some(results) = self.run_iteration(iteration, hint_slice, require_all_outputs)? {
+            if let Some(results) = self.run_iteration(iteration, hint_slice, policy)? {
                 return Ok(results);
             }
         }
@@ -74,7 +83,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         args: &[Ival],
         hint: Option<&[Hint]>,
-        require_all_outputs: bool,
+        policy: OutputPolicy,
     ) -> Result<Vec<Ival>, RivalError> {
         self.load_arguments(args);
 
@@ -95,7 +104,7 @@ impl<D: Discretization> Machine<D> {
             self.baseline_adjust(prec);
             self.run_with_hint(hint_slice);
 
-            match self.collect_outputs(require_all_outputs)? {
+            match self.collect_outputs(policy)? {
                 Some(outputs) => return Ok(outputs),
                 None => {
                     let next = prec.saturating_mul(2);
@@ -118,7 +127,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         rect: &[Ival],
         hint: Option<&[Hint]>,
-        require_all_outputs: bool,
+        policy: OutputPolicy,
     ) -> (Ival, Vec<Hint>, bool) {
         self.load_arguments(rect);
 
@@ -134,7 +143,7 @@ impl<D: Discretization> Machine<D> {
         self.baseline_adjust(self.disc.target().saturating_add(10));
         self.run_with_hint(hint_slice);
 
-        let (good, _done, bad, stuck) = self.return_flags(require_all_outputs);
+        let (good, _done, bad, stuck) = self.return_flags(policy);
         let (next_hint, converged) = self.make_hint(hint_slice);
 
         let status = Ival::bool_interval(bad || stuck, (!good) || stuck);
@@ -145,9 +154,8 @@ impl<D: Discretization> Machine<D> {
     /// return only the boolean interval status.
     ///
     /// See [`Machine::analyze`] for details on the return value.
-    pub fn analyze_baseline(&mut self, rect: &[Ival], require_all_outputs: bool) -> Ival {
-        let (status, _hint, _conv) =
-            self.analyze_baseline_with_hints(rect, None, require_all_outputs);
+    pub fn analyze_baseline(&mut self, rect: &[Ival], policy: OutputPolicy) -> Ival {
+        let (status, _hint, _conv) = self.analyze_baseline_with_hints(rect, None, policy);
         status
     }
 
@@ -156,7 +164,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         iteration: usize,
         hints: &[Hint],
-        require_all_outputs: bool,
+        policy: OutputPolicy,
     ) -> Result<Option<Vec<Ival>>, RivalError> {
         assert_eq!(hints.len(), self.instructions.len(), "hint length mismatch");
         self.iteration = iteration;
@@ -164,7 +172,7 @@ impl<D: Discretization> Machine<D> {
             return Err(RivalError::Unsamplable);
         }
         self.run_with_hint(hints);
-        self.collect_outputs(require_all_outputs)
+        self.collect_outputs(policy)
     }
 
     /// Analyze an input rectangle using adaptive precision tuning.
@@ -184,7 +192,7 @@ impl<D: Discretization> Machine<D> {
         &mut self,
         rect: &[Ival],
         hint: Option<&[Hint]>,
-        require_all_outputs: bool,
+        policy: OutputPolicy,
     ) -> (Ival, Vec<Hint>, bool) {
         self.load_arguments(rect);
 
@@ -202,7 +210,7 @@ impl<D: Discretization> Machine<D> {
         self.adjust(hint_slice);
         self.run_with_hint(hint_slice);
 
-        let (good, _done, bad, stuck) = self.return_flags(require_all_outputs);
+        let (good, _done, bad, stuck) = self.return_flags(policy);
         let (next_hint, converged) = self.make_hint(hint_slice);
 
         let status = Ival::bool_interval(bad || stuck, (!good) || stuck);
@@ -215,8 +223,8 @@ impl<D: Discretization> Machine<D> {
     ///
     /// The advantage of `analyze` over `apply` is that it applies to
     /// whole ranges of input points and is much faster.
-    pub fn analyze(&mut self, rect: &[Ival], require_all_outputs: bool) -> Ival {
-        let (status, _hint, _conv) = self.analyze_with_hints(rect, None, require_all_outputs);
+    pub fn analyze(&mut self, rect: &[Ival], policy: OutputPolicy) -> Ival {
+        let (status, _hint, _conv) = self.analyze_with_hints(rect, None, policy);
         status
     }
 
@@ -375,11 +383,8 @@ impl<D: Discretization> Machine<D> {
     }
 
     /// Gather outputs and translate evaluation state into convergence results.
-    fn collect_outputs(
-        &mut self,
-        require_all_outputs: bool,
-    ) -> Result<Option<Vec<Ival>>, RivalError> {
-        let (good, done, bad, stuck) = self.return_flags(require_all_outputs);
+    fn collect_outputs(&mut self, policy: OutputPolicy) -> Result<Option<Vec<Ival>>, RivalError> {
+        let (good, done, bad, stuck) = self.return_flags(policy);
         let mut outputs = Vec::with_capacity(self.outputs.len());
 
         for &root in &self.outputs {
@@ -400,15 +405,16 @@ impl<D: Discretization> Machine<D> {
     }
 
     /// Compute (good, done, bad, stuck) flags and update output_distance.
-    fn return_flags(&mut self, require_all_outputs: bool) -> (bool, bool, bool, bool) {
-        let mut good = require_all_outputs || self.outputs.is_empty();
+    fn return_flags(&mut self, policy: OutputPolicy) -> (bool, bool, bool, bool) {
+        let require_all = policy == OutputPolicy::RequireAll;
+        let mut good = require_all || self.outputs.is_empty();
         let mut done = true;
-        let mut bad = !require_all_outputs && !self.outputs.is_empty();
+        let mut bad = !require_all && !self.outputs.is_empty();
         let mut stuck = false;
 
         for (idx, &root) in self.outputs.iter().enumerate() {
             let value = &self.registers[root];
-            if require_all_outputs {
+            if require_all {
                 if value.err.total {
                     bad = true;
                 } else if value.err.partial {
@@ -420,10 +426,10 @@ impl<D: Discretization> Machine<D> {
             }
             self.output_distance[idx] = false;
 
-            if !require_all_outputs && value.err.total {
+            if !require_all && value.err.total {
                 continue;
             }
-            if !require_all_outputs && value.err.partial {
+            if !require_all && value.err.partial {
                 done = false;
             }
 

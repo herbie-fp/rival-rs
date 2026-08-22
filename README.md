@@ -2,7 +2,7 @@
 Rival is a library for evaluating real expressions to high precision. You can play around with the CLI:
 
 ```
-$ cargo run --bin rival-cli --release -- "(- (sqrt (+ x 1)) 1)" "(x)" "(1e-30)"
+$ cargo run --bin rival-cli --features cli --release -- "(- (sqrt (+ x 1)) 1)" "(x)" "(1e-30)"
 ```
 Will give you:
 ```

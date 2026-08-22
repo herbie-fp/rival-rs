@@ -215,8 +215,7 @@ impl<D: Discretization> MachineBuilder<D> {
         let default_hint = vec![Hint::Execute; instruction_count];
         let precisions = vec![0u32; instruction_count];
         let repeats = vec![false; instruction_count];
-        let mut output_distance = vec![false; program.outputs.len()];
-        output_distance.fill(false);
+        let output_distance = vec![false; program.outputs.len()];
 
         Machine {
             disc: self.disc,
@@ -431,10 +430,7 @@ fn make_initial_precisions<D: Discretization>(
         instructions[idx].for_each_input(|reg| {
             if reg >= var_count {
                 let input_idx = reg - var_count;
-                if input_idx != idx {
-                    precisions[input_idx] =
-                        precisions[input_idx].max(current_prec + ampl_tuning_bits);
-                }
+                precisions[input_idx] = precisions[input_idx].max(current_prec + ampl_tuning_bits);
             }
         });
     }
@@ -456,9 +452,6 @@ fn make_initial_repeats(
         let mut depends = false;
         instr.data.for_each_input(|reg| {
             let child = reg as isize - var_count as isize;
-            if child == idx as isize {
-                return;
-            }
             if child < 0 || !initial_repeats[child as usize] {
                 depends = true;
             }

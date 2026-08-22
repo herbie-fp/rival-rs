@@ -203,11 +203,9 @@ pub(super) fn update_repeats<D: Discretization>(
         };
 
         // Recompute if precision increases or if any child recomputes.
-        let self_reg = machine.instruction_register(idx);
         let mut children_repeat = true;
         instr.data.for_each_input(|reg| {
-            if reg != self_reg
-                && let Some(child_idx) = machine.register_to_instruction(reg)
+            if let Some(child_idx) = machine.register_to_instruction(reg)
                 && !repeats[child_idx]
             {
                 children_repeat = false;

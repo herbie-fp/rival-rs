@@ -310,14 +310,8 @@ macro_rules! def_ops {
     // Helper: Standard path reduction (mark all children and execute).
     (@standard_path_reduce $machine:expr, $idx:expr, $mark:expr) => {{
         let instruction = &$machine.instructions[$idx];
-        let out_reg = $machine.instruction_register($idx);
 
-        // Mark all children (except output register).
-        instruction.for_each_input(|reg| {
-            if reg != out_reg {
-                $mark(reg);
-            }
-        });
+        instruction.for_each_input(&mut $mark);
 
         $crate::eval::machine::PathOutcome {
             hint: $crate::eval::machine::Hint::Execute,

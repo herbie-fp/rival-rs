@@ -13,19 +13,6 @@
 
 #define RIVAL_EXPR_INVALID UINT32_MAX
 
-enum RivalError
-#ifdef __cplusplus
-  : int32_t
-#endif // __cplusplus
- {
-    RIVAL_ERROR_OK = 0,
-    RIVAL_ERROR_INVALID_INPUT = -1,
-    RIVAL_ERROR_UNSAMPLABLE = -2,
-};
-#ifndef __cplusplus
-typedef int32_t RivalError;
-#endif // __cplusplus
-
 enum RivalDiscType
 #ifdef __cplusplus
   : uint32_t
@@ -39,107 +26,17 @@ enum RivalDiscType
 typedef uint32_t RivalDiscType;
 #endif // __cplusplus
 
-enum RivalUnaryOp
+enum RivalError
 #ifdef __cplusplus
-  : uint32_t
+  : int32_t
 #endif // __cplusplus
  {
-    RIVAL_UNARY_OP_NEG,
-    RIVAL_UNARY_OP_FABS,
-    RIVAL_UNARY_OP_SQRT,
-    RIVAL_UNARY_OP_CBRT,
-    RIVAL_UNARY_OP_POW2,
-    RIVAL_UNARY_OP_EXP,
-    RIVAL_UNARY_OP_EXP2,
-    RIVAL_UNARY_OP_EXPM1,
-    RIVAL_UNARY_OP_LOG,
-    RIVAL_UNARY_OP_LOG2,
-    RIVAL_UNARY_OP_LOG10,
-    RIVAL_UNARY_OP_LOG1P,
-    RIVAL_UNARY_OP_LOGB,
-    RIVAL_UNARY_OP_SIN,
-    RIVAL_UNARY_OP_COS,
-    RIVAL_UNARY_OP_TAN,
-    RIVAL_UNARY_OP_ASIN,
-    RIVAL_UNARY_OP_ACOS,
-    RIVAL_UNARY_OP_ATAN,
-    RIVAL_UNARY_OP_SINH,
-    RIVAL_UNARY_OP_COSH,
-    RIVAL_UNARY_OP_TANH,
-    RIVAL_UNARY_OP_ASINH,
-    RIVAL_UNARY_OP_ACOSH,
-    RIVAL_UNARY_OP_ATANH,
-    RIVAL_UNARY_OP_ERF,
-    RIVAL_UNARY_OP_ERFC,
-    RIVAL_UNARY_OP_LGAMMA,
-    RIVAL_UNARY_OP_TGAMMA,
-    RIVAL_UNARY_OP_RINT,
-    RIVAL_UNARY_OP_ROUND,
-    RIVAL_UNARY_OP_CEIL,
-    RIVAL_UNARY_OP_FLOOR,
-    RIVAL_UNARY_OP_TRUNC,
-    RIVAL_UNARY_OP_NOT,
-    RIVAL_UNARY_OP_ASSERT,
-    RIVAL_UNARY_OP_ERROR,
+    RIVAL_ERROR_OK = 0,
+    RIVAL_ERROR_INVALID_INPUT = -1,
+    RIVAL_ERROR_UNSAMPLABLE = -2,
 };
 #ifndef __cplusplus
-typedef uint32_t RivalUnaryOp;
-#endif // __cplusplus
-
-enum RivalUnaryParamOp
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
-    RIVAL_UNARY_PARAM_OP_COSU,
-    RIVAL_UNARY_PARAM_OP_SINU,
-    RIVAL_UNARY_PARAM_OP_TANU,
-};
-#ifndef __cplusplus
-typedef uint32_t RivalUnaryParamOp;
-#endif // __cplusplus
-
-enum RivalBinaryOp
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
-    RIVAL_BINARY_OP_ADD,
-    RIVAL_BINARY_OP_SUB,
-    RIVAL_BINARY_OP_MUL,
-    RIVAL_BINARY_OP_DIV,
-    RIVAL_BINARY_OP_POW,
-    RIVAL_BINARY_OP_HYPOT,
-    RIVAL_BINARY_OP_FMIN,
-    RIVAL_BINARY_OP_FMAX,
-    RIVAL_BINARY_OP_FDIM,
-    RIVAL_BINARY_OP_COPYSIGN,
-    RIVAL_BINARY_OP_FMOD,
-    RIVAL_BINARY_OP_REMAINDER,
-    RIVAL_BINARY_OP_ATAN2,
-    RIVAL_BINARY_OP_AND,
-    RIVAL_BINARY_OP_OR,
-    RIVAL_BINARY_OP_EQ,
-    RIVAL_BINARY_OP_NE,
-    RIVAL_BINARY_OP_LT,
-    RIVAL_BINARY_OP_LE,
-    RIVAL_BINARY_OP_GT,
-    RIVAL_BINARY_OP_GE,
-};
-#ifndef __cplusplus
-typedef uint32_t RivalBinaryOp;
-#endif // __cplusplus
-
-enum RivalTernaryOp
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
-    RIVAL_TERNARY_OP_FMA,
-    RIVAL_TERNARY_OP_IF,
-};
-#ifndef __cplusplus
-typedef uint32_t RivalTernaryOp;
+typedef int32_t RivalError;
 #endif // __cplusplus
 
 enum RivalProfilingMode
@@ -152,6 +49,109 @@ enum RivalProfilingMode
 };
 #ifndef __cplusplus
 typedef uint32_t RivalProfilingMode;
+#endif // __cplusplus
+
+enum RivalUnaryOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_UNARY_OP_NEG = 0,
+    RIVAL_UNARY_OP_FABS = 1,
+    RIVAL_UNARY_OP_SQRT = 2,
+    RIVAL_UNARY_OP_CBRT = 3,
+    RIVAL_UNARY_OP_POW2 = 4,
+    RIVAL_UNARY_OP_EXP = 5,
+    RIVAL_UNARY_OP_EXP2 = 6,
+    RIVAL_UNARY_OP_EXPM1 = 7,
+    RIVAL_UNARY_OP_LOG = 8,
+    RIVAL_UNARY_OP_LOG2 = 9,
+    RIVAL_UNARY_OP_LOG10 = 10,
+    RIVAL_UNARY_OP_LOG1P = 11,
+    RIVAL_UNARY_OP_LOGB = 12,
+    RIVAL_UNARY_OP_SIN = 13,
+    RIVAL_UNARY_OP_COS = 14,
+    RIVAL_UNARY_OP_TAN = 15,
+    RIVAL_UNARY_OP_ASIN = 16,
+    RIVAL_UNARY_OP_ACOS = 17,
+    RIVAL_UNARY_OP_ATAN = 18,
+    RIVAL_UNARY_OP_SINH = 19,
+    RIVAL_UNARY_OP_COSH = 20,
+    RIVAL_UNARY_OP_TANH = 21,
+    RIVAL_UNARY_OP_ASINH = 22,
+    RIVAL_UNARY_OP_ACOSH = 23,
+    RIVAL_UNARY_OP_ATANH = 24,
+    RIVAL_UNARY_OP_ERF = 25,
+    RIVAL_UNARY_OP_ERFC = 26,
+    RIVAL_UNARY_OP_LGAMMA = 27,
+    RIVAL_UNARY_OP_TGAMMA = 28,
+    RIVAL_UNARY_OP_RINT = 29,
+    RIVAL_UNARY_OP_ROUND = 30,
+    RIVAL_UNARY_OP_CEIL = 31,
+    RIVAL_UNARY_OP_FLOOR = 32,
+    RIVAL_UNARY_OP_TRUNC = 33,
+    RIVAL_UNARY_OP_NOT = 34,
+    RIVAL_UNARY_OP_ASSERT = 35,
+    RIVAL_UNARY_OP_ERROR = 36,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalUnaryOp;
+#endif // __cplusplus
+
+enum RivalUnaryParamOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_UNARY_PARAM_OP_COSU = 0,
+    RIVAL_UNARY_PARAM_OP_SINU = 1,
+    RIVAL_UNARY_PARAM_OP_TANU = 2,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalUnaryParamOp;
+#endif // __cplusplus
+
+enum RivalBinaryOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_BINARY_OP_ADD = 0,
+    RIVAL_BINARY_OP_SUB = 1,
+    RIVAL_BINARY_OP_MUL = 2,
+    RIVAL_BINARY_OP_DIV = 3,
+    RIVAL_BINARY_OP_POW = 4,
+    RIVAL_BINARY_OP_HYPOT = 5,
+    RIVAL_BINARY_OP_FMIN = 6,
+    RIVAL_BINARY_OP_FMAX = 7,
+    RIVAL_BINARY_OP_FDIM = 8,
+    RIVAL_BINARY_OP_COPYSIGN = 9,
+    RIVAL_BINARY_OP_FMOD = 10,
+    RIVAL_BINARY_OP_REMAINDER = 11,
+    RIVAL_BINARY_OP_ATAN2 = 12,
+    RIVAL_BINARY_OP_AND = 13,
+    RIVAL_BINARY_OP_OR = 14,
+    RIVAL_BINARY_OP_EQ = 15,
+    RIVAL_BINARY_OP_NE = 16,
+    RIVAL_BINARY_OP_LT = 17,
+    RIVAL_BINARY_OP_LE = 18,
+    RIVAL_BINARY_OP_GT = 19,
+    RIVAL_BINARY_OP_GE = 20,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalBinaryOp;
+#endif // __cplusplus
+
+enum RivalTernaryOp
+#ifdef __cplusplus
+  : uint32_t
+#endif // __cplusplus
+ {
+    RIVAL_TERNARY_OP_FMA = 0,
+    RIVAL_TERNARY_OP_IF = 1,
+};
+#ifndef __cplusplus
+typedef uint32_t RivalTernaryOp;
 #endif // __cplusplus
 
 typedef struct RivalDiscretization RivalDiscretization;
@@ -197,7 +197,7 @@ extern "C" {
 
 uint32_t rival_version(void);
 
-const char *rival_error_message(RivalError error);
+const char *rival_error_message(int32_t error);
 
 struct RivalDiscretization *rival_disc_f64(uint32_t precision);
 
@@ -231,20 +231,20 @@ uint32_t rival_expr_pi(struct RivalExprBuilder *builder);
 
 uint32_t rival_expr_e(struct RivalExprBuilder *builder);
 
-uint32_t rival_expr_unary(struct RivalExprBuilder *builder, RivalUnaryOp op, uint32_t arg);
+uint32_t rival_expr_unary(struct RivalExprBuilder *builder, uint32_t op, uint32_t arg);
 
 uint32_t rival_expr_unary_param(struct RivalExprBuilder *builder,
-                                RivalUnaryParamOp op,
+                                uint32_t op,
                                 uint64_t param,
                                 uint32_t arg);
 
 uint32_t rival_expr_binary(struct RivalExprBuilder *builder,
-                           RivalBinaryOp op,
+                           uint32_t op,
                            uint32_t lhs,
                            uint32_t rhs);
 
 uint32_t rival_expr_ternary(struct RivalExprBuilder *builder,
-                            RivalTernaryOp op,
+                            uint32_t op,
                             uint32_t arg1,
                             uint32_t arg2,
                             uint32_t arg3);
@@ -321,7 +321,7 @@ uint32_t rival_machine_iterations(const struct RivalMachine *machine);
 
 uint32_t rival_machine_bumps(const struct RivalMachine *machine);
 
-void rival_machine_set_profiling(struct RivalMachine *machine, RivalProfilingMode mode);
+void rival_machine_set_profiling(struct RivalMachine *machine, uint32_t mode);
 
 RivalProfilingMode rival_machine_get_profiling(const struct RivalMachine *machine);
 

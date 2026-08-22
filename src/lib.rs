@@ -72,5 +72,5 @@ mod mpfr;
 pub use eval::builder::{Expression, ExpressionBuilder};
 pub use eval::machine::{Discretization, Hint, Machine, MachineBuilder};
 pub use eval::profile::Execution;
-pub use eval::run::RivalError;
+pub use eval::run::{OutputPolicy, RivalError};
 pub use interval::{ErrorFlags, Ival};

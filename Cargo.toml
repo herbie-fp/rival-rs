@@ -16,17 +16,19 @@ path = "src/lib.rs"
 [[bin]]
 name = "rival-cli"
 path = "src/bin/main.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["dep:ascii_table"]
 
 [dependencies]
 rug = { version = "1.28", features = ["float"] }
 gmp-mpfr-sys = "1.6"
-rand = "0.9"
 indexmap = "2.12"
 # TODO: remove
 itertools = "0.14.0"
 thiserror = "1"
-# todo: make bin dependency
-ascii_table = "4.0"
+ascii_table = { version = "4.0", optional = true }
 
 [profile.release]
 lto = true

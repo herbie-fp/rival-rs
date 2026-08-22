@@ -21,7 +21,7 @@ impl Ival {
             self.err.total = true;
         }
 
-        let mut y_abs = Ival::zero(y.max_prec());
+        let mut y_abs = Ival::zero(y.prec());
         y_abs.exact_fabs_assign(y);
 
         let x_hi = x.hi.as_float();
@@ -30,7 +30,7 @@ impl Ival {
         let lo_is_pos = mpfr_sign(x_lo) == 1 || x_lo.is_zero();
 
         if hi_is_neg {
-            let mut neg_x = Ival::zero(x.max_prec());
+            let mut neg_x = Ival::zero(x.prec());
             neg_x.exact_neg_assign(x);
             self.fmod_pos_assign(&neg_x, &y_abs);
             self.neg_inplace();
@@ -40,7 +40,7 @@ impl Ival {
             let zero_val = zero(x.prec());
             let (neg, pos) = x.split_at(&zero_val);
 
-            let mut neg_x = Ival::zero(neg.max_prec());
+            let mut neg_x = Ival::zero(neg.prec());
             neg_x.exact_neg_assign(&neg);
 
             let mut neg_result = Ival::zero(self.prec());
@@ -71,7 +71,7 @@ impl Ival {
             self.err.total = true;
         }
 
-        let mut y_abs = Ival::zero(y.max_prec());
+        let mut y_abs = Ival::zero(y.prec());
         y_abs.exact_fabs_assign(y);
 
         let x_hi = x.hi.as_float();
@@ -80,7 +80,7 @@ impl Ival {
         let lo_is_pos = mpfr_sign(x_lo) == 1 || x_lo.is_zero();
 
         if hi_is_neg {
-            let mut neg_x = Ival::zero(x.max_prec());
+            let mut neg_x = Ival::zero(x.prec());
             neg_x.exact_neg_assign(x);
             self.remainder_pos_assign(&neg_x, &y_abs);
             self.neg_inplace();
@@ -90,7 +90,7 @@ impl Ival {
             let zero_val = zero(x.prec());
             let (neg, pos) = x.split_at(&zero_val);
 
-            let mut neg_x = Ival::zero(neg.max_prec());
+            let mut neg_x = Ival::zero(neg.prec());
             neg_x.exact_neg_assign(&neg);
 
             let mut neg_result = Ival::zero(self.prec());

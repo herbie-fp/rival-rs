@@ -188,12 +188,6 @@ impl Ival {
         self.hi.as_float_mut().set_prec(prec);
     }
 
-    pub(crate) fn max_prec(&self) -> u32 {
-        // Assumed that the lo and high precisions are always the same.
-        // This is ony enforced in Ival::new however.
-        self.lo.as_float().prec()
-    }
-
     pub(crate) fn neg_inplace(&mut self) {
         self.lo.as_float_mut().neg_assign();
         self.hi.as_float_mut().neg_assign();
@@ -228,15 +222,10 @@ impl Ival {
         // 2-bit precision is sufficient for 0/1 endpoints.
         let to_float = |b: bool| Float::with_val(2, if b { 1 } else { 0 });
         let (lo, hi) = (to_float(lo_true), to_float(hi_true));
-        let err = if lo.is_nan() || hi.is_nan() || (lo.eq(&hi) && lo.is_infinite()) {
-            ErrorFlags::error()
-        } else {
-            ErrorFlags::none()
-        };
         Ival {
             lo: Endpoint::new(OrdFloat::from(lo), true),
             hi: Endpoint::new(OrdFloat::from(hi), true),
-            err,
+            err: ErrorFlags::none(),
         }
     }
 

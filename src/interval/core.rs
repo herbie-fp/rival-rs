@@ -55,7 +55,7 @@ impl Ival {
     }
 
     pub(crate) fn exact_neg_assign(&mut self, a: &Ival) {
-        let prec = a.max_prec();
+        let prec = a.prec();
         self.set_prec(prec);
         self.neg_assign(a);
     }
@@ -94,7 +94,7 @@ impl Ival {
     }
 
     pub(crate) fn exact_fabs_assign(&mut self, a: &Ival) {
-        let prec = a.max_prec();
+        let prec = a.prec();
         self.set_prec(prec);
         self.fabs_assign(a);
     }
@@ -198,7 +198,7 @@ impl Ival {
 
     /// Compute the interval `logb` (exponent extraction) of `a`.
     pub fn logb_assign(&mut self, a: &Ival) {
-        let mut abs_a = Ival::zero(a.max_prec());
+        let mut abs_a = Ival::zero(a.prec());
         abs_a.exact_fabs_assign(a);
 
         let mut tmp = Ival::zero(self.prec());
@@ -295,7 +295,7 @@ impl Ival {
 
     /// Compute the interval hyperbolic cosine of `a`.
     pub fn cosh_assign(&mut self, a: &Ival) {
-        let mut abs_a = Ival::zero(a.max_prec());
+        let mut abs_a = Ival::zero(a.prec());
         abs_a.exact_fabs_assign(a);
         self.monotonic_assign(&mpfr_cosh, &abs_a);
         let thresh = acosh_overflow_threshold(self.prec());

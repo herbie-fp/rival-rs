@@ -9,17 +9,11 @@ use crate::{
     interval::Ival,
 };
 
-/// Mark child registers except for the output register
+/// Mark the child registers an instruction depends on
 #[inline]
-fn mark_inputs<F: FnMut(usize)>(
-    out_reg: usize,
-    mark: &mut F,
-    regs: impl IntoIterator<Item = usize>,
-) {
+fn mark_inputs<F: FnMut(usize)>(mark: &mut F, regs: impl IntoIterator<Item = usize>) {
     for r in regs {
-        if r != out_reg {
-            mark(r);
-        }
+        mark(r);
     }
 }
 
@@ -27,18 +21,11 @@ fn mark_inputs<F: FnMut(usize)>(
 pub(super) fn path_reduction<D: Discretization, F>(
     machine: &Machine<D>,
     idx: usize,
-    mut mark_child: F,
+    mark: F,
 ) -> PathOutcome
 where
     F: FnMut(usize),
 {
-    let out_reg = machine.instruction_register(idx);
-    let mark = |reg: usize| {
-        if reg != out_reg {
-            mark_child(reg);
-        }
-    };
-
     match &machine.instructions[idx].data {
         InstructionData::Unary { op, .. } => ops::path_reduce_unary(*op, machine, idx, mark),
         InstructionData::UnaryParam { op, .. } => {
@@ -81,7 +68,7 @@ where
 
     match &machine.instructions[idx].data {
         InstructionData::Binary { lhs, rhs, .. } => {
-            mark_inputs(out_reg, &mut mark, [*lhs, *rhs]);
+            mark_inputs(&mut mark, [*lhs, *rhs]);
             PathOutcome::execute(false)
         }
         _ => PathOutcome::execute(false),
@@ -104,7 +91,7 @@ where
 
     match &machine.instructions[idx].data {
         InstructionData::Unary { arg, .. } => {
-            mark_inputs(out_reg, &mut mark, [*arg]);
+            mark_inputs(&mut mark, [*arg]);
             PathOutcome::execute(false)
         }
         _ => PathOutcome::execute(true),
@@ -120,14 +107,13 @@ pub fn assert_op_path_reduce<D: Discretization, F>(
 where
     F: FnMut(usize),
 {
-    let out_reg = machine.instruction_register(idx);
     let instr = &machine.instructions[idx].data;
 
     if let InstructionData::Unary { arg, .. } = instr {
         if let Some(value) = machine.registers[*arg].known_bool() {
             return PathOutcome::known_bool(value);
         }
-        mark_inputs(out_reg, &mut mark, [*arg]);
+        mark_inputs(&mut mark, [*arg]);
         return PathOutcome::execute(false);
     }
 
@@ -144,7 +130,6 @@ pub fn if_op_path_reduce<D: Discretization, F>(
 where
     F: FnMut(usize),
 {
-    let out_reg = machine.instruction_register(idx);
     let instr = &machine.instructions[idx].data;
 
     if let InstructionData::Ternary {
@@ -153,10 +138,10 @@ where
     {
         if let Some(value) = machine.registers[*arg1].known_bool() {
             let (pos, reg) = if value { (1, *arg2) } else { (2, *arg3) };
-            mark_inputs(out_reg, &mut mark, [reg]);
+            mark_inputs(&mut mark, [reg]);
             return PathOutcome::alias(pos);
         }
-        mark_inputs(out_reg, &mut mark, [*arg1, *arg2, *arg3]);
+        mark_inputs(&mut mark, [*arg1, *arg2, *arg3]);
         return PathOutcome::execute(false);
     }
 
@@ -175,7 +160,6 @@ where
 {
     let instr = &machine.instructions[idx].data;
     if let InstructionData::Binary { lhs, rhs, .. } = instr {
-        let out_reg = machine.instruction_register(idx);
         let lhs_val = &machine.registers[*lhs];
         let rhs_val = &machine.registers[*rhs];
 
@@ -190,7 +174,7 @@ where
                 } else {
                     (1, *rhs)
                 };
-                mark_inputs(out_reg, &mut mark, [child]);
+                mark_inputs(&mut mark, [child]);
                 return PathOutcome::alias(alias_idx);
             }
             Some(false) => {
@@ -200,12 +184,12 @@ where
                 } else {
                     (0, *lhs)
                 };
-                mark_inputs(out_reg, &mut mark, [child]);
+                mark_inputs(&mut mark, [child]);
                 return PathOutcome::alias(alias_idx);
             }
             None => {
                 // Uncertain.
-                mark_inputs(out_reg, &mut mark, [*lhs, *rhs]);
+                mark_inputs(&mut mark, [*lhs, *rhs]);
                 return PathOutcome::execute(false);
             }
         }

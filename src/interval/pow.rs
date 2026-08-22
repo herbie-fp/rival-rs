@@ -47,7 +47,7 @@ impl Ival {
     }
 
     pub fn pow2_assign(&mut self, x: &Ival) {
-        let mut abs_x = Ival::zero(x.max_prec());
+        let mut abs_x = Ival::zero(x.prec());
         abs_x.pre_fabs_assign(x);
         self.monotonic_assign(&mpfr_pow2, &abs_x);
     }
@@ -147,7 +147,7 @@ impl Ival {
 
         if y_lo == y_hi {
             if mpfr_integer(y_lo) {
-                let mut abs_x = Ival::zero(x.max_prec());
+                let mut abs_x = Ival::zero(x.prec());
                 abs_x.exact_fabs_assign(x);
 
                 if mpfr_odd(y_lo) {
@@ -164,7 +164,7 @@ impl Ival {
                 self.err = ErrorFlags::error();
             }
         } else {
-            let mut abs_x = Ival::zero(x.max_prec());
+            let mut abs_x = Ival::zero(x.prec());
             abs_x.exact_fabs_assign(x);
 
             let mut pos_pow = Ival::zero(self.prec());

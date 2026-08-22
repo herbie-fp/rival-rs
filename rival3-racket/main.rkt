@@ -2,16 +2,16 @@
 
 (require ffi/unsafe
          ffi/unsafe/define
+         (only-in racket/contract [-> c:->] [->* c:->*] [->i c:->i])
          racket/runtime-path
          math/bigfloat
          math/flonum
          (only-in math/private/bigfloat/mpfr _mpfr-pointer)
          "ops.rkt")
 
-(provide rival-compile
-         rival-apply
+;; No contract for functions that tend to be extremely hot.
+(provide rival-apply
          rival-apply/partial
-         baseline-compile
          baseline-apply
          baseline-apply/partial
          rival-analyze-with-hints
@@ -21,29 +21,27 @@
          baseline-analyze-with-hints
          baseline-analyze-with-hints/partial
          baseline-analyze
-         baseline-analyze/partial
-         rival-profile
-         rival-set-profiling!
-         rival-profiling-enabled?
+         baseline-analyze/partial)
+
+(provide (contract-out
+          [rival-compile compile/c]
+          [baseline-compile compile/c]
+          [rival-machine? (c:-> any/c boolean?)]
+          [rival-hints? (c:-> any/c boolean?)]
+          [rival-profile (c:-> rival-machine? profile-key/c any)]
+          [rival-set-profiling! (c:-> rival-machine? any/c void?)]
+          [rival-profiling-enabled? (c:-> rival-machine? boolean?)]
+          [boolean-discretization discretization/c]
+          [flonum-discretization discretization/c])
          (struct-out exn:rival)
          (struct-out exn:rival:invalid)
          (struct-out exn:rival:unsamplable)
          (struct-out execution)
          (struct-out discretization)
          (struct-out ival)
-         boolean-discretization
-         flonum-discretization
-         rival-machine?
-         rival-hints?
          *rival-max-precision*
          *rival-max-iterations*
          *rival-profile-executions*
-         execution-name
-         execution-number
-         execution-precision
-         execution-time
-         execution-memory
-         execution-iteration
          (all-from-out "ops.rkt"))
 
 (struct exn:rival exn:fail ())
@@ -109,24 +107,24 @@
 (define _rival-profiling-mode (_enum '(off = 0 on = 1) _uint32))
 (define _rival-disc-type (_enum '(bool = 0 f32 = 1 f64 = 2) _uint32))
 
-;; These operator names, and their order, must match the operator enums in the
-;; native ABI.
-(define unary-op-names
-  '(neg fabs sqrt cbrt pow2
-        exp exp2 expm1 log log2 log10 log1p logb
-        sin cos tan asin acos atan
-        sinh cosh tanh asinh acosh atanh
-        erf erfc lgamma tgamma
-        rint round ceil floor trunc
-        not assert error))
+(define RIVAL_EXPR_INVALID #xFFFFFFFF)
+(define unary-op-codes
+  '(neg = 0 fabs = 1 sqrt = 2 cbrt = 3 pow2 = 4
+        exp = 5 exp2 = 6 expm1 = 7 log = 8 log2 = 9 log10 = 10 log1p = 11 logb = 12
+        sin = 13 cos = 14 tan = 15 asin = 16 acos = 17 atan = 18
+        sinh = 19 cosh = 20 tanh = 21 asinh = 22 acosh = 23 atanh = 24
+        erf = 25 erfc = 26 lgamma = 27 tgamma = 28
+        rint = 29 round = 30 ceil = 31 floor = 32 trunc = 33
+        not = 34 assert = 35 error = 36))
 
-(define _rival-unary-op (_enum unary-op-names _uint32))
-(define _rival-unary-param-op (_enum '(cosu sinu tanu) _uint32))
+(define _rival-unary-op (_enum unary-op-codes _uint32))
+(define _rival-unary-param-op (_enum '(cosu = 0 sinu = 1 tanu = 2) _uint32))
 (define _rival-binary-op
-  (_enum
-   '(add sub mul div pow hypot fmin fmax fdim copysign fmod remainder atan2 and or eq ne lt le gt ge)
-   _uint32))
-(define _rival-ternary-op (_enum '(fma if) _uint32))
+  (_enum '(add = 0 sub = 1 mul = 2 div = 3 pow = 4 hypot = 5
+               fmin = 6 fmax = 7 fdim = 8 copysign = 9 fmod = 10 remainder = 11 atan2 = 12
+               and = 13 or = 14 eq = 15 ne = 16 lt = 17 le = 18 gt = 19 ge = 20)
+         _uint32))
+(define _rival-ternary-op (_enum '(fma = 0 if = 1) _uint32))
 
 (define-rival rival_version (_fun -> _uint32))
 (define-rival rival_disc_f64 (_fun _uint32 -> _pointer))
@@ -188,7 +186,8 @@
   (unless (= v 2)
     (error 'rival3 "ABI version mismatch: expected 2, got ~a" v)))
 
-(struct machine-wrapper (ptr n-vars n-exprs discs arg-buf arg-bfs out-buf out-bfs rect-buf name-table)
+(struct machine-wrapper
+        (ptr n-vars n-exprs discs arg-buf arg-bfs out-buf out-bfs rect-buf rect-bfs name-table)
   #:property prop:cpointer
   (struct-field-index ptr))
 
@@ -196,6 +195,19 @@
 
 (define rival-machine? machine-wrapper?)
 (define rival-hints? hints-wrapper?)
+
+(define discretization/c
+  (struct/c discretization (or/c 'bool 'f32 'f64) exact-positive-integer? procedure?))
+
+(define compile/c
+  (c:->i ([exprs list?]
+          [vars (listof symbol?)]
+          [discs (exprs)
+                 (and/c (listof discretization/c)
+                        (lambda (discs) (= (length discs) (length exprs))))])
+         [machine rival-machine?]))
+
+(define profile-key/c (or/c 'instructions 'iterations 'bumps 'executions 'summary))
 
 (define (machine-destroy wrapper)
   (when (machine-wrapper-ptr wrapper)
@@ -229,7 +241,10 @@
   (free-ptr arr))
 
 ;; Unary operators are named the same way in Rival expressions and in the ABI.
-(define unary-ops (list->seteq unary-op-names))
+(define unary-ops
+  (for/seteq ([entry (in-list unary-op-codes)]
+              #:when (and (symbol? entry) (not (eq? entry '=))))
+    entry))
 
 (define binary-ops
   (hasheq '+ 'add
@@ -279,49 +294,51 @@
            (cdr comparisons)))
 
   (define (compile expr)
-    (hash-ref!
-     cache
-     expr
-     (lambda ()
-       (match expr
-         [(or 'PI '(PI)) (rival_expr_pi builder)]
-         [(or 'E '(E)) (rival_expr_e builder)]
-         [(or 'TRUE '(TRUE)) (rival_expr_f64 builder 1.0)]
-         [(or 'FALSE '(FALSE)) (rival_expr_f64 builder 0.0)]
-         [(or 'INFINITY '(INFINITY)) (rival_expr_f64 builder +inf.0)]
-         [(or 'NAN '(NAN)) (rival_expr_f64 builder +nan.0)]
-         [(? symbol?) (rival_expr_var builder (symbol->string expr))]
-         [(? exact-integer?)
-          (if (exactly-representable-at-current-bf-precision? expr)
-              (rival_expr_bigint builder (number->string expr))
-              (rival_expr_bigrational builder (number->string expr) "1"))]
-         [(? rational?)
-          (define exact-val (inexact->exact expr))
-          (if (integer? expr)
-              (rival_expr_bigint builder (number->string exact-val))
-              (rival_expr_bigrational builder
-                                      (number->string (numerator exact-val))
-                                      (number->string (denominator exact-val))))]
-         [(? real?) (rival_expr_f64 builder (exact->inexact expr))]
-         [`(- ,x) (rival_expr_unary builder 'neg (compile x))]
-         [`((sinu ,n) ,x) (rival_expr_unary_param builder 'sinu n (compile x))]
-         [`((cosu ,n) ,x) (rival_expr_unary_param builder 'cosu n (compile x))]
-         [`((tanu ,n) ,x) (rival_expr_unary_param builder 'tanu n (compile x))]
-         [`(fma ,a ,b ,c) (rival_expr_ternary builder 'fma (compile a) (compile b) (compile c))]
-         [`(if ,c ,t ,f) (rival_expr_ternary builder 'if (compile c) (compile t) (compile f))]
-         [`(,op ,x)
-          #:when (set-member? unary-ops op)
-          (rival_expr_unary builder op (compile x))]
-         [`(,op ,x ,y)
-          #:when (hash-ref binary-ops op #f)
-          (rival_expr_binary builder (hash-ref binary-ops op) (compile x) (compile y))]
-         [`(,op ,x ,y ,rest ...)
-          #:when (set-member? variadic-ops op)
-          (fold-binary (hash-ref binary-ops op) (list* x y rest))]
-         [`(,op ,x ,y ,rest ...)
-          #:when (set-member? chainable-cmp-ops op)
-          (chain-compare (hash-ref binary-ops op) (list* x y rest))]
-         [_ (error 'rival-compile "Unknown expression: ~a" expr)]))))
+    (define handle (hash-ref! cache expr (lambda () (compile-node expr))))
+    (when (= handle RIVAL_EXPR_INVALID)
+      (error 'rival-compile "Could not compile subexpression: ~a" expr))
+    handle)
+
+  (define (compile-node expr)
+    (match expr
+      [(or 'PI '(PI)) (rival_expr_pi builder)]
+      [(or 'E '(E)) (rival_expr_e builder)]
+      [(or 'TRUE '(TRUE)) (rival_expr_f64 builder 1.0)]
+      [(or 'FALSE '(FALSE)) (rival_expr_f64 builder 0.0)]
+      [(or 'INFINITY '(INFINITY)) (rival_expr_f64 builder +inf.0)]
+      [(or 'NAN '(NAN)) (rival_expr_f64 builder +nan.0)]
+      [(? symbol?) (rival_expr_var builder (symbol->string expr))]
+      [(? exact-integer?)
+       (if (exactly-representable-at-current-bf-precision? expr)
+           (rival_expr_bigint builder (number->string expr))
+           (rival_expr_bigrational builder (number->string expr) "1"))]
+      [(? rational?)
+       (define exact-val (inexact->exact expr))
+       (if (integer? expr)
+           (rival_expr_bigint builder (number->string exact-val))
+           (rival_expr_bigrational builder
+                                   (number->string (numerator exact-val))
+                                   (number->string (denominator exact-val))))]
+      [(? real?) (rival_expr_f64 builder (exact->inexact expr))]
+      [`(- ,x) (rival_expr_unary builder 'neg (compile x))]
+      [`((sinu ,n) ,x) (rival_expr_unary_param builder 'sinu n (compile x))]
+      [`((cosu ,n) ,x) (rival_expr_unary_param builder 'cosu n (compile x))]
+      [`((tanu ,n) ,x) (rival_expr_unary_param builder 'tanu n (compile x))]
+      [`(fma ,a ,b ,c) (rival_expr_ternary builder 'fma (compile a) (compile b) (compile c))]
+      [`(if ,c ,t ,f) (rival_expr_ternary builder 'if (compile c) (compile t) (compile f))]
+      [`(,op ,x)
+       #:when (set-member? unary-ops op)
+       (rival_expr_unary builder op (compile x))]
+      [`(,op ,x ,y)
+       #:when (hash-ref binary-ops op #f)
+       (rival_expr_binary builder (hash-ref binary-ops op) (compile x) (compile y))]
+      [`(,op ,x ,y ,rest ...)
+       #:when (set-member? variadic-ops op)
+       (fold-binary (hash-ref binary-ops op) (list* x y rest))]
+      [`(,op ,x ,y ,rest ...)
+       #:when (set-member? chainable-cmp-ops op)
+       (chain-compare (hash-ref binary-ops op) (list* x y rest))]
+      [_ (error 'rival-compile "Unknown expression: ~a" expr)]))
 
   compile)
 
@@ -406,6 +423,8 @@
         [bf (in-vector out-bfs)])
     (ptr-set! out-buf _mpfr-pointer i bf))
 
+  (define rect-bfs (make-vector (* 2 n-vars) #f))
+
   (define-values (names-ptr names-len) (rival_instruction_names machine-ptr))
   (define name-table
     (if (and names-ptr (> names-len 0))
@@ -422,6 +441,7 @@
                      out-buf
                      out-bfs
                      rect-buf
+                     rect-bfs
                      name-table))
   (register-finalizer wrapper machine-destroy)
   wrapper)
@@ -432,20 +452,38 @@
     (error 'baseline-compile "Failed to configure baseline machine"))
   machine)
 
-(define (apply-inner machine pt hints call-fn error-name)
+(define (native-apply machine args n-args outs n-outs hints require-all?)
+  (rival_apply machine args n-args outs n-outs hints
+               (*rival-max-iterations*) (*rival-max-precision*) require-all?))
+
+(define (native-apply-baseline machine args n-args outs n-outs hints require-all?)
+  (rival_apply_baseline machine args n-args outs n-outs hints
+                        (*rival-max-precision*) require-all?))
+
+(define (apply-inner machine pt hints ffi-fn require-all? error-name)
   (define n-args (vector-length pt))
+  (unless (= n-args (machine-wrapper-n-vars machine))
+    (raise-arguments-error error-name
+                           "point has the wrong number of variables"
+                           "expected"
+                           (machine-wrapper-n-vars machine)
+                           "given"
+                           n-args))
   (define arg-ptrs (machine-wrapper-arg-buf machine))
-  (when (> n-args 0)
-    (for ([i (in-range n-args)]
-          [arg (in-vector pt)])
-      (ptr-set! arg-ptrs _mpfr-pointer i (input->bf arg))))
+  (define arg-bfs (machine-wrapper-arg-bfs machine))
+  (for ([i (in-range n-args)]
+        [arg (in-vector pt)])
+    (define x (input->bf arg))
+    (vector-set! arg-bfs i x)
+    (ptr-set! arg-ptrs _mpfr-pointer i x))
   (define n-outs (machine-wrapper-n-exprs machine))
   (define out-bfs (machine-wrapper-out-bfs machine))
   (define out-ptrs (machine-wrapper-out-buf machine))
   (define hints-ptr (and hints (hints-wrapper-ptr hints)))
   (define args-to-pass (and (> n-args 0) arg-ptrs))
   (define status-code
-    (call-fn (machine-wrapper-ptr machine) args-to-pass n-args out-ptrs n-outs hints-ptr))
+    (ffi-fn (machine-wrapper-ptr machine)
+            args-to-pass n-args out-ptrs n-outs hints-ptr require-all?))
   (match status-code
     ['ok
      (define discs (machine-wrapper-discs machine))
@@ -460,46 +498,36 @@
     [else (error error-name "Unknown result code: ~a" status-code)]))
 
 (define (rival-apply machine pt [hints #f])
-  (apply-inner machine
-               pt
-               hints
-               (lambda (m a na o no h)
-                 (rival_apply
-                  m a na o no h (*rival-max-iterations*) (*rival-max-precision*) #t))
-               'rival-apply))
+  (apply-inner machine pt hints native-apply #t 'rival-apply))
 
 (define (rival-apply/partial machine pt [hints #f])
-  (apply-inner machine
-               pt
-               hints
-               (lambda (m a na o no h)
-                 (rival_apply
-                  m a na o no h (*rival-max-iterations*) (*rival-max-precision*) #f))
-               'rival-apply/partial))
+  (apply-inner machine pt hints native-apply #f 'rival-apply/partial))
 
 (define (baseline-apply machine pt [hints #f])
-  (apply-inner machine
-               pt
-               hints
-               (lambda (m a na o no h)
-                 (rival_apply_baseline m a na o no h (*rival-max-precision*) #t))
-               'baseline-apply))
+  (apply-inner machine pt hints native-apply-baseline #t 'baseline-apply))
 
 (define (baseline-apply/partial machine pt [hints #f])
-  (apply-inner machine
-               pt
-               hints
-               (lambda (m a na o no h)
-                 (rival_apply_baseline m a na o no h (*rival-max-precision*) #f))
-               'baseline-apply/partial))
+  (apply-inner machine pt hints native-apply-baseline #f 'baseline-apply/partial))
 
 (define (analyze-inner machine rect hint ffi-fn require-all? error-name)
   (define n-args (vector-length rect))
+  (unless (= n-args (machine-wrapper-n-vars machine))
+    (raise-arguments-error error-name
+                           "rectangle has the wrong number of variables"
+                           "expected"
+                           (machine-wrapper-n-vars machine)
+                           "given"
+                           n-args))
   (define rect-ptrs (machine-wrapper-rect-buf machine))
+  (define rect-bfs (machine-wrapper-rect-bfs machine))
   (for ([i (in-range n-args)]
         [iv (in-vector rect)])
-    (ptr-set! rect-ptrs _mpfr-pointer (* 2 i) (input->bf (ival-lo iv)))
-    (ptr-set! rect-ptrs _mpfr-pointer (+ (* 2 i) 1) (input->bf (ival-hi iv))))
+    (define lo (input->bf (ival-lo iv)))
+    (define hi (input->bf (ival-hi iv)))
+    (vector-set! rect-bfs (* 2 i) lo)
+    (vector-set! rect-bfs (+ (* 2 i) 1) hi)
+    (ptr-set! rect-ptrs _mpfr-pointer (* 2 i) lo)
+    (ptr-set! rect-ptrs _mpfr-pointer (+ (* 2 i) 1) hi))
   (define hint-ptr (and hint (hints-wrapper-ptr hint)))
   (match-define (list status-code is-error maybe-error converged hints-ptr)
     (ffi-fn (machine-wrapper-ptr machine) rect-ptrs n-args hint-ptr require-all?))
@@ -542,6 +570,12 @@
 (define (baseline-analyze/partial machine rect)
   (car (baseline-analyze-with-hints/partial machine rect)))
 
+(define (instruction-name names instr-idx)
+  (cond
+    [(negative? instr-idx) "adjust"]
+    [(< instr-idx (vector-length names)) (vector-ref names instr-idx)]
+    [else ""]))
+
 (define (rival-profile machine param)
   (match param
     ['instructions (rival_machine_instruction_count (machine-wrapper-ptr machine))]
@@ -557,13 +591,7 @@
                     ([i (in-range len)])
           (define rec-ptr (ptr-add ptr (* i execution-record-size)))
           (match-define (list instr-idx prec time-ms iter) (ptr-ref rec-ptr _execution-record))
-          (define name
-            (cond
-              [(and (vector? names) (<= 0 instr-idx) (< instr-idx (vector-length names)))
-               (vector-ref names instr-idx)]
-              [(< instr-idx 0) "adjust"]
-              [else ""]))
-          (execution name instr-idx prec time-ms 0 iter))])]
+          (execution (instruction-name names instr-idx) instr-idx prec time-ms 0 iter))])]
     ['summary
      (define bucket-size (max 1 (quotient (*rival-max-precision*) 25)))
      (match-define (list entries-ptr entries-len bumps iterations)
@@ -577,13 +605,7 @@
              (define entry-ptr (ptr-add entries-ptr (* i aggregated-entry-size)))
              (match-define (list instr-idx prec-bucket time-ms count)
                (ptr-ref entry-ptr _aggregated-entry))
-             (define name
-               (cond
-                 [(and (vector? names) (<= 0 instr-idx) (< instr-idx (vector-length names)))
-                  (vector-ref names instr-idx)]
-                 [(< instr-idx 0) "adjust"]
-                 [else ""]))
-             (list name prec-bucket time-ms count))))
+             (list (instruction-name names instr-idx) prec-bucket time-ms count))))
      (list summary bumps iterations)]))
 
 (define (rival-set-profiling! machine enabled)

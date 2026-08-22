@@ -283,92 +283,190 @@ unsafe fn expression_ternary(
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum RivalUnaryOp {
-    Neg,
-    Fabs,
-    Sqrt,
-    Cbrt,
-    Pow2,
-    Exp,
-    Exp2,
-    Expm1,
-    Log,
-    Log2,
-    Log10,
-    Log1p,
-    Logb,
-    Sin,
-    Cos,
-    Tan,
-    Asin,
-    Acos,
-    Atan,
-    Sinh,
-    Cosh,
-    Tanh,
-    Asinh,
-    Acosh,
-    Atanh,
-    Erf,
-    Erfc,
-    Lgamma,
-    Tgamma,
-    Rint,
-    Round,
-    Ceil,
-    Floor,
-    Trunc,
-    Not,
-    Assert,
-    Error,
+    Neg = 0,
+    Fabs = 1,
+    Sqrt = 2,
+    Cbrt = 3,
+    Pow2 = 4,
+    Exp = 5,
+    Exp2 = 6,
+    Expm1 = 7,
+    Log = 8,
+    Log2 = 9,
+    Log10 = 10,
+    Log1p = 11,
+    Logb = 12,
+    Sin = 13,
+    Cos = 14,
+    Tan = 15,
+    Asin = 16,
+    Acos = 17,
+    Atan = 18,
+    Sinh = 19,
+    Cosh = 20,
+    Tanh = 21,
+    Asinh = 22,
+    Acosh = 23,
+    Atanh = 24,
+    Erf = 25,
+    Erfc = 26,
+    Lgamma = 27,
+    Tgamma = 28,
+    Rint = 29,
+    Round = 30,
+    Ceil = 31,
+    Floor = 32,
+    Trunc = 33,
+    Not = 34,
+    Assert = 35,
+    Error = 36,
+}
+
+impl RivalUnaryOp {
+    fn from_abi(code: u32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Neg,
+            1 => Self::Fabs,
+            2 => Self::Sqrt,
+            3 => Self::Cbrt,
+            4 => Self::Pow2,
+            5 => Self::Exp,
+            6 => Self::Exp2,
+            7 => Self::Expm1,
+            8 => Self::Log,
+            9 => Self::Log2,
+            10 => Self::Log10,
+            11 => Self::Log1p,
+            12 => Self::Logb,
+            13 => Self::Sin,
+            14 => Self::Cos,
+            15 => Self::Tan,
+            16 => Self::Asin,
+            17 => Self::Acos,
+            18 => Self::Atan,
+            19 => Self::Sinh,
+            20 => Self::Cosh,
+            21 => Self::Tanh,
+            22 => Self::Asinh,
+            23 => Self::Acosh,
+            24 => Self::Atanh,
+            25 => Self::Erf,
+            26 => Self::Erfc,
+            27 => Self::Lgamma,
+            28 => Self::Tgamma,
+            29 => Self::Rint,
+            30 => Self::Round,
+            31 => Self::Ceil,
+            32 => Self::Floor,
+            33 => Self::Trunc,
+            34 => Self::Not,
+            35 => Self::Assert,
+            36 => Self::Error,
+            _ => return None,
+        })
+    }
 }
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum RivalUnaryParamOp {
-    Cosu,
-    Sinu,
-    Tanu,
+    Cosu = 0,
+    Sinu = 1,
+    Tanu = 2,
+}
+
+impl RivalUnaryParamOp {
+    fn from_abi(code: u32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Cosu,
+            1 => Self::Sinu,
+            2 => Self::Tanu,
+            _ => return None,
+        })
+    }
 }
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum RivalBinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Pow,
-    Hypot,
-    Fmin,
-    Fmax,
-    Fdim,
-    Copysign,
-    Fmod,
-    Remainder,
-    Atan2,
-    And,
-    Or,
-    Eq,
-    Ne,
-    Lt,
-    Le,
-    Gt,
-    Ge,
+    Add = 0,
+    Sub = 1,
+    Mul = 2,
+    Div = 3,
+    Pow = 4,
+    Hypot = 5,
+    Fmin = 6,
+    Fmax = 7,
+    Fdim = 8,
+    Copysign = 9,
+    Fmod = 10,
+    Remainder = 11,
+    Atan2 = 12,
+    And = 13,
+    Or = 14,
+    Eq = 15,
+    Ne = 16,
+    Lt = 17,
+    Le = 18,
+    Gt = 19,
+    Ge = 20,
+}
+
+impl RivalBinaryOp {
+    fn from_abi(code: u32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Add,
+            1 => Self::Sub,
+            2 => Self::Mul,
+            3 => Self::Div,
+            4 => Self::Pow,
+            5 => Self::Hypot,
+            6 => Self::Fmin,
+            7 => Self::Fmax,
+            8 => Self::Fdim,
+            9 => Self::Copysign,
+            10 => Self::Fmod,
+            11 => Self::Remainder,
+            12 => Self::Atan2,
+            13 => Self::And,
+            14 => Self::Or,
+            15 => Self::Eq,
+            16 => Self::Ne,
+            17 => Self::Lt,
+            18 => Self::Le,
+            19 => Self::Gt,
+            20 => Self::Ge,
+            _ => return None,
+        })
+    }
 }
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum RivalTernaryOp {
-    Fma,
-    If,
+    Fma = 0,
+    If = 1,
+}
+
+impl RivalTernaryOp {
+    fn from_abi(code: u32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Fma,
+            1 => Self::If,
+            _ => return None,
+        })
+    }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_expr_unary(
     builder: *mut RivalExprBuilder,
-    op: RivalUnaryOp,
+    op: u32,
     arg: u32,
 ) -> u32 {
+    let Some(op) = RivalUnaryOp::from_abi(op) else {
+        return RIVAL_EXPR_INVALID;
+    };
     unsafe {
         expression_unary(builder, arg, |expressions, arg| match op {
             RivalUnaryOp::Neg => expressions.neg(arg),
@@ -415,10 +513,13 @@ pub unsafe extern "C" fn rival_expr_unary(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_expr_unary_param(
     builder: *mut RivalExprBuilder,
-    op: RivalUnaryParamOp,
+    op: u32,
     param: u64,
     arg: u32,
 ) -> u32 {
+    let Some(op) = RivalUnaryParamOp::from_abi(op) else {
+        return RIVAL_EXPR_INVALID;
+    };
     unsafe {
         expression_unary_param(builder, param, arg, |expressions, param, arg| match op {
             RivalUnaryParamOp::Cosu => expressions.cosu(param, arg),
@@ -431,10 +532,13 @@ pub unsafe extern "C" fn rival_expr_unary_param(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_expr_binary(
     builder: *mut RivalExprBuilder,
-    op: RivalBinaryOp,
+    op: u32,
     lhs: u32,
     rhs: u32,
 ) -> u32 {
+    let Some(op) = RivalBinaryOp::from_abi(op) else {
+        return RIVAL_EXPR_INVALID;
+    };
     unsafe {
         expression_binary(builder, lhs, rhs, |expressions, lhs, rhs| match op {
             RivalBinaryOp::Add => expressions.add(lhs, rhs),
@@ -465,11 +569,14 @@ pub unsafe extern "C" fn rival_expr_binary(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rival_expr_ternary(
     builder: *mut RivalExprBuilder,
-    op: RivalTernaryOp,
+    op: u32,
     arg1: u32,
     arg2: u32,
     arg3: u32,
 ) -> u32 {
+    let Some(op) = RivalTernaryOp::from_abi(op) else {
+        return RIVAL_EXPR_INVALID;
+    };
     unsafe {
         expression_ternary(
             builder,

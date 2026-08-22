@@ -4,7 +4,9 @@ use crate::expr::RivalExprBuilder;
 use crate::hints::RivalHints;
 use crate::profile::{ProfileCache, RivalExecution, RivalProfileSummary};
 use gmp_mpfr_sys::mpfr::{self, mpfr_t};
-use rival::{ErrorFlags, Hint, Ival, Machine, MachineBuilder, RivalError as CoreError};
+use rival::{
+    ErrorFlags, Hint, Ival, Machine, MachineBuilder, OutputPolicy, RivalError as CoreError,
+};
 use rug::Float;
 use std::ptr;
 use std::slice;
@@ -26,6 +28,16 @@ pub enum RivalProfilingMode {
     On = 1,
 }
 
+impl RivalProfilingMode {
+    fn from_abi(code: u32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Off,
+            1 => Self::On,
+            _ => return None,
+        })
+    }
+}
+
 #[repr(C)]
 pub struct RivalAnalyzeResult {
     pub error: RivalError,
@@ -43,6 +55,15 @@ fn invalid_analyze_result() -> RivalAnalyzeResult {
         maybe_error: true,
         converged: false,
         hints: ptr::null_mut(),
+    }
+}
+
+#[inline]
+fn output_policy(require_all_outputs: bool) -> OutputPolicy {
+    if require_all_outputs {
+        OutputPolicy::RequireAll
+    } else {
+        OutputPolicy::AllowPartial
     }
 }
 
@@ -194,15 +215,14 @@ unsafe fn apply_inner(
     wrapper.machine.set_max_precision(max_precision);
     let hints_opt = unsafe { extract_hints(hints) };
 
+    let policy = output_policy(require_all_outputs);
     let result = match max_iterations {
-        Some(iters) => {
-            wrapper
-                .machine
-                .apply(&wrapper.arg_buf, hints_opt, iters, require_all_outputs)
-        }
+        Some(iters) => wrapper
+            .machine
+            .apply(&wrapper.arg_buf, hints_opt, iters, policy),
         None => wrapper
             .machine
-            .apply_baseline(&wrapper.arg_buf, hints_opt, require_all_outputs),
+            .apply_baseline(&wrapper.arg_buf, hints_opt, policy),
     };
 
     match result {
@@ -232,22 +252,21 @@ unsafe fn analyze_inner(
         return invalid_analyze_result();
     }
 
-    if let Err(_) = unsafe { marshal_rect_args(rect, n_args, &mut wrapper.rect_buf) } {
+    if unsafe { marshal_rect_args(rect, n_args, &mut wrapper.rect_buf) }.is_err() {
         return invalid_analyze_result();
     }
 
     let hints_opt = unsafe { extract_hints(hints) };
 
+    let policy = output_policy(require_all_outputs);
     let (status, next_hints, converged) = if baseline {
-        wrapper.machine.analyze_baseline_with_hints(
-            &wrapper.rect_buf,
-            hints_opt,
-            require_all_outputs,
-        )
+        wrapper
+            .machine
+            .analyze_baseline_with_hints(&wrapper.rect_buf, hints_opt, policy)
     } else {
         wrapper
             .machine
-            .analyze_with_hints(&wrapper.rect_buf, hints_opt, require_all_outputs)
+            .analyze_with_hints(&wrapper.rect_buf, hints_opt, policy)
     };
 
     RivalAnalyzeResult {
@@ -592,10 +611,10 @@ pub unsafe extern "C" fn rival_machine_bumps(machine: *const RivalMachine) -> u3
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rival_machine_set_profiling(
-    machine: *mut RivalMachine,
-    mode: RivalProfilingMode,
-) {
+pub unsafe extern "C" fn rival_machine_set_profiling(machine: *mut RivalMachine, mode: u32) {
+    let Some(mode) = RivalProfilingMode::from_abi(mode) else {
+        return;
+    };
     if !machine.is_null() {
         let wrapper = unsafe { &mut *machine };
         wrapper

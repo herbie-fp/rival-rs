@@ -10,6 +10,17 @@ pub enum RivalDiscType {
     F64 = 2,
 }
 
+impl RivalDiscType {
+    fn from_abi(code: u32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Bool,
+            1 => Self::F32,
+            2 => Self::F64,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct RivalDiscretization {
     precision: u32,
@@ -119,11 +130,17 @@ pub unsafe extern "C" fn rival_disc_mixed(
     if types.is_null() || n_types == 0 {
         return ptr::null_mut();
     }
-    let types_vec = unsafe { std::slice::from_raw_parts(types, n_types) }.to_vec();
-    Box::into_raw(Box::new(RivalDiscretization {
-        precision,
-        types: types_vec,
-    }))
+    // Read as the underlying integer: the caller may supply codes this ABI
+    // version does not define, and those are not valid `RivalDiscType` values.
+    let codes = unsafe { std::slice::from_raw_parts(types.cast::<u32>(), n_types) };
+    let Some(types) = codes
+        .iter()
+        .map(|&code| RivalDiscType::from_abi(code))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return ptr::null_mut();
+    };
+    Box::into_raw(Box::new(RivalDiscretization { precision, types }))
 }
 
 #[unsafe(no_mangle)]

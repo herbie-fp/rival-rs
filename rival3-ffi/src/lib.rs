@@ -23,6 +23,17 @@ pub enum RivalError {
     Unsamplable = -2,
 }
 
+impl RivalError {
+    fn from_abi(code: i32) -> Option<Self> {
+        Some(match code {
+            0 => Self::Ok,
+            -1 => Self::InvalidInput,
+            -2 => Self::Unsamplable,
+            _ => return None,
+        })
+    }
+}
+
 pub const RIVAL_ABI_VERSION: u32 = 2;
 
 #[unsafe(no_mangle)]
@@ -31,10 +42,11 @@ pub extern "C" fn rival_version() -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn rival_error_message(error: RivalError) -> *const c_char {
-    match error {
-        RivalError::Ok => c"Success".as_ptr(),
-        RivalError::InvalidInput => c"Invalid input".as_ptr(),
-        RivalError::Unsamplable => c"Unsamplable input".as_ptr(),
+pub extern "C" fn rival_error_message(error: i32) -> *const c_char {
+    match RivalError::from_abi(error) {
+        Some(RivalError::Ok) => c"Success".as_ptr(),
+        Some(RivalError::InvalidInput) => c"Invalid input".as_ptr(),
+        Some(RivalError::Unsamplable) => c"Unsamplable input".as_ptr(),
+        None => c"Unknown error".as_ptr(),
     }
 }

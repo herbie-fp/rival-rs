@@ -1,6 +1,7 @@
 use ascii_table::{Align, AsciiTable};
 use rival::{
-    Discretization, Execution, Expression, ExpressionBuilder, Ival, MachineBuilder, RivalError,
+    Discretization, Execution, Expression, ExpressionBuilder, Ival, MachineBuilder, OutputPolicy,
+    RivalError,
 };
 use rug::{Assign, Float, Rational};
 use std::env;
@@ -376,10 +377,10 @@ fn main() {
         .collect();
 
     // Warm-up run just like the racket repl.
-    let _ = machine.apply(&arg_ivals, None, 5, false);
+    let _ = machine.apply(&arg_ivals, None, 5, OutputPolicy::AllowPartial);
 
     let start = std::time::Instant::now();
-    let result = machine.apply(&arg_ivals, None, 10, false);
+    let result = machine.apply(&arg_ivals, None, 10, OutputPolicy::AllowPartial);
     let total_time = start.elapsed().as_secs_f64() * 1000.0;
 
     let execs: Vec<Execution> = machine.execution_records().to_vec();
