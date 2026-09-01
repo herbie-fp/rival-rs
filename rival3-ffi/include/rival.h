@@ -277,7 +277,6 @@ RivalError rival_apply(struct RivalMachine *machine,
                        uintptr_t n_out,
                        const struct RivalHints *hints,
                        uintptr_t max_iterations,
-                       uint32_t max_precision,
                        bool require_all_outputs);
 
 RivalError rival_apply_baseline(struct RivalMachine *machine,
@@ -286,7 +285,6 @@ RivalError rival_apply_baseline(struct RivalMachine *machine,
                                 mpfr_t *const *out,
                                 uintptr_t n_out,
                                 const struct RivalHints *hints,
-                                uint32_t max_precision,
                                 bool require_all_outputs);
 
 struct RivalAnalyzeResult rival_analyze_with_hints(struct RivalMachine *machine,

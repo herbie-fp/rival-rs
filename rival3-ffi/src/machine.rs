@@ -169,6 +169,9 @@ unsafe fn write_outputs(
     if outputs.len() != n_out {
         return Err(RivalError::InvalidInput);
     }
+    if n_out == 0 {
+        return Ok(());
+    }
     let out_ptrs = unsafe { slice::from_raw_parts(out, n_out) };
     for &out_ptr in out_ptrs.iter() {
         if out_ptr.is_null() {
@@ -193,7 +196,6 @@ unsafe fn apply_inner(
     out: *const *mut mpfr_t,
     n_out: usize,
     hints: *const RivalHints,
-    max_precision: u32,
     // Selects adaptive (`Some`) or baseline (`None`) evaluation.
     max_iterations: Option<usize>,
     require_all_outputs: bool,
@@ -212,7 +214,6 @@ unsafe fn apply_inner(
         }
     }
 
-    wrapper.machine.set_max_precision(max_precision);
     let hints_opt = unsafe { extract_hints(hints) };
 
     let policy = output_policy(require_all_outputs);
@@ -252,7 +253,7 @@ unsafe fn analyze_inner(
         return invalid_analyze_result();
     }
 
-    if unsafe { marshal_rect_args(rect, n_args, &mut wrapper.rect_buf) }.is_err() {
+    if n_args > 0 && unsafe { marshal_rect_args(rect, n_args, &mut wrapper.rect_buf) }.is_err() {
         return invalid_analyze_result();
     }
 
@@ -381,10 +382,9 @@ pub unsafe extern "C" fn rival_apply(
     n_out: usize,
     hints: *const RivalHints,
     max_iterations: usize,
-    max_precision: u32,
     require_all_outputs: bool,
 ) -> RivalError {
-    if machine.is_null() || out.is_null() || (args.is_null() && n_args > 0) {
+    if machine.is_null() || (out.is_null() && n_out > 0) || (args.is_null() && n_args > 0) {
         return RivalError::InvalidInput;
     }
 
@@ -397,7 +397,6 @@ pub unsafe extern "C" fn rival_apply(
             out,
             n_out,
             hints,
-            max_precision,
             Some(max_iterations),
             require_all_outputs,
         )
@@ -412,10 +411,9 @@ pub unsafe extern "C" fn rival_apply_baseline(
     out: *const *mut mpfr_t,
     n_out: usize,
     hints: *const RivalHints,
-    max_precision: u32,
     require_all_outputs: bool,
 ) -> RivalError {
-    if machine.is_null() || out.is_null() || (args.is_null() && n_args > 0) {
+    if machine.is_null() || (out.is_null() && n_out > 0) || (args.is_null() && n_args > 0) {
         return RivalError::InvalidInput;
     }
 
@@ -428,7 +426,6 @@ pub unsafe extern "C" fn rival_apply_baseline(
             out,
             n_out,
             hints,
-            max_precision,
             None,
             require_all_outputs,
         )
@@ -443,7 +440,7 @@ pub unsafe extern "C" fn rival_analyze_with_hints(
     hints: *const RivalHints,
     require_all_outputs: bool,
 ) -> RivalAnalyzeResult {
-    if machine.is_null() || rect.is_null() {
+    if machine.is_null() || (rect.is_null() && n_args > 0) {
         return invalid_analyze_result();
     }
 
@@ -459,7 +456,7 @@ pub unsafe extern "C" fn rival_analyze_baseline_with_hints(
     hints: *const RivalHints,
     require_all_outputs: bool,
 ) -> RivalAnalyzeResult {
-    if machine.is_null() || rect.is_null() {
+    if machine.is_null() || (rect.is_null() && n_args > 0) {
         return invalid_analyze_result();
     }
 
