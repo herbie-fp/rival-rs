@@ -9,7 +9,7 @@ FFI_BUILD := rival3-ffi/target/release/$(LIB_NAME)
 PKG_NATIVE_DIR := $(PKG_DIR)/private/native/$(PLATFORM)
 PKG_NATIVE_LIB := $(PKG_NATIVE_DIR)/$(LIB_NAME)
 
-.PHONY: build package install update uninstall clean nightly
+.PHONY: build package install uninstall clean nightly
 
 build:
 	cargo build --release --manifest-path=$(FFI_MANIFEST)
@@ -22,13 +22,11 @@ package: build
 	@if [ -f "$(PKG_DIR).zip.CHECKSUM" ]; then mv -f $(PKG_DIR).zip.CHECKSUM $(PKG_NAME).zip.CHECKSUM; fi
 
 install: build
-	raco pkg install --user --batch --auto -D --type dir --link --name $(PKG_NAME) --skip-installed $(PKG_DIR)
-
-update: build
-	raco pkg update --user --batch --auto -D --type dir --link --name $(PKG_NAME) --skip-uninstalled $(PKG_DIR)
+	raco pkg remove --user --batch --force --no-docs $(PKG_NAME) && echo "Warning: uninstalling $(PKG_NAME) and reinstalling local version" || :
+	raco pkg install --user --batch --auto -D --type dir --link --name $(PKG_NAME) $(PKG_DIR)
 
 uninstall:
-	raco pkg remove --user --batch --auto --force --no-docs $(PKG_NAME)
+	raco pkg remove --user --batch --force --no-docs $(PKG_NAME) || :
 
 clean:
 	cargo clean
