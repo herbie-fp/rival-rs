@@ -1,3 +1,5 @@
+use super::core::split_zero;
+use super::scratch::{with_ival, with_ival2};
 use super::value::Ival;
 use crate::mpfr::{
     mpfr_add, mpfr_div, mpfr_fmod, mpfr_max, mpfr_min, mpfr_mul, mpfr_neg, mpfr_remainder,
@@ -21,39 +23,10 @@ impl Ival {
             self.err.total = true;
         }
 
-        let mut y_abs = Ival::zero(y.prec());
-        y_abs.exact_fabs_assign(y);
-
-        let x_hi = x.hi.as_float();
-        let x_lo = x.lo.as_float();
-        let hi_is_neg = mpfr_sign(x_hi) == -1 && !x_hi.is_zero();
-        let lo_is_pos = mpfr_sign(x_lo) == 1 || x_lo.is_zero();
-
-        if hi_is_neg {
-            let mut neg_x = Ival::zero(x.prec());
-            neg_x.exact_neg_assign(x);
-            self.fmod_pos_assign(&neg_x, &y_abs);
-            self.neg_inplace();
-        } else if lo_is_pos {
-            self.fmod_pos_assign(x, &y_abs);
-        } else {
-            let zero_val = zero(x.prec());
-            let (neg, pos) = x.split_at(&zero_val);
-
-            let mut neg_x = Ival::zero(neg.prec());
-            neg_x.exact_neg_assign(&neg);
-
-            let mut neg_result = Ival::zero(self.prec());
-            let mut pos_result = Ival::zero(self.prec());
-
-            neg_result.fmod_pos_assign(&neg_x, &y_abs);
-            pos_result.fmod_pos_assign(&pos, &y_abs);
-
-            neg_result.neg_inplace();
-
-            self.assign_from(&pos_result);
-            self.union_assign(neg_result);
-        }
+        with_ival(y.prec(), |y_abs| {
+            y_abs.exact_fabs_assign(y);
+            self.signed_mod_assign(x, y_abs, Ival::fmod_pos_assign);
+        });
     }
 
     /// Compute the interval remainder `remainder(x, y)`.
@@ -71,38 +44,39 @@ impl Ival {
             self.err.total = true;
         }
 
-        let mut y_abs = Ival::zero(y.prec());
-        y_abs.exact_fabs_assign(y);
+        with_ival(y.prec(), |y_abs| {
+            y_abs.exact_fabs_assign(y);
+            self.signed_mod_assign(x, y_abs, Ival::remainder_pos_assign);
+        });
+    }
 
+    fn signed_mod_assign(&mut self, x: &Ival, y_abs: &Ival, pos_op: fn(&mut Ival, &Ival, &Ival)) {
         let x_hi = x.hi.as_float();
         let x_lo = x.lo.as_float();
         let hi_is_neg = mpfr_sign(x_hi) == -1 && !x_hi.is_zero();
         let lo_is_pos = mpfr_sign(x_lo) == 1 || x_lo.is_zero();
 
         if hi_is_neg {
-            let mut neg_x = Ival::zero(x.prec());
-            neg_x.exact_neg_assign(x);
-            self.remainder_pos_assign(&neg_x, &y_abs);
+            with_ival(x.prec(), |neg_x| {
+                neg_x.exact_neg_assign(x);
+                pos_op(self, neg_x, y_abs);
+            });
             self.neg_inplace();
         } else if lo_is_pos {
-            self.remainder_pos_assign(x, &y_abs);
+            pos_op(self, x, y_abs);
         } else {
-            let zero_val = zero(x.prec());
-            let (neg, pos) = x.split_at(&zero_val);
-
-            let mut neg_x = Ival::zero(neg.prec());
-            neg_x.exact_neg_assign(&neg);
-
-            let mut neg_result = Ival::zero(self.prec());
-            let mut pos_result = Ival::zero(self.prec());
-
-            neg_result.remainder_pos_assign(&neg_x, &y_abs);
-            pos_result.remainder_pos_assign(&pos, &y_abs);
-
-            neg_result.neg_inplace();
-
-            self.assign_from(&pos_result);
-            self.union_assign(neg_result);
+            split_zero(x, |neg, pos| {
+                with_ival(neg.prec(), |neg_x| {
+                    neg_x.exact_neg_assign(neg);
+                    with_ival2(self.prec(), |neg_result, pos_result| {
+                        pos_op(neg_result, neg_x, y_abs);
+                        pos_op(pos_result, pos, y_abs);
+                        neg_result.neg_inplace();
+                        self.assign_from(pos_result);
+                        self.union_with(neg_result);
+                    });
+                });
+            });
         }
     }
 

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RivalExecution {
@@ -31,7 +29,6 @@ pub(crate) struct ProfileCache {
     pub aggregated: Vec<RivalAggregatedProfile>,
     pub last_bumps: u32,
     pub last_iterations: u32,
-    aggregation_buf: HashMap<(i32, u32), (f64, usize)>,
 }
 
 impl ProfileCache {
@@ -41,44 +38,39 @@ impl ProfileCache {
             aggregated: Vec::new(),
             last_bumps: 0,
             last_iterations: 0,
-            aggregation_buf: HashMap::new(),
         }
     }
 
-    pub fn aggregate_from<'a, I>(
+    pub fn aggregate_from(
         &mut self,
-        records: I,
+        records: &[rival::Execution],
         bucket_size: u32,
         bumps: usize,
         iterations: usize,
-    ) -> RivalProfileSummary
-    where
-        I: Iterator<Item = &'a rival::Execution>,
-    {
+    ) -> RivalProfileSummary {
         let bucket_size = bucket_size.max(1);
-        self.aggregation_buf.clear();
-
-        for exec in records {
-            let precision_bucket = exec.precision - (exec.precision % bucket_size);
-            let key = (exec.number, precision_bucket);
-            let entry = self.aggregation_buf.entry(key).or_insert((0.0, 0));
-            entry.0 += exec.time_ms;
-            entry.1 += 1;
-        }
 
         self.aggregated.clear();
-        self.aggregated.reserve(self.aggregation_buf.len());
-        for (&(instruction_idx, precision_bucket), &(total_time_ms, count)) in &self.aggregation_buf
-        {
+        self.aggregated.reserve(records.len());
+        for exec in records {
             self.aggregated.push(RivalAggregatedProfile {
-                instruction_idx,
-                precision_bucket,
-                total_time_ms,
-                count,
+                instruction_idx: exec.number,
+                precision_bucket: exec.precision - (exec.precision % bucket_size),
+                total_time_ms: exec.time_ms,
+                count: 1,
             });
         }
         self.aggregated
             .sort_by_key(|e| (e.instruction_idx, e.precision_bucket));
+        self.aggregated.dedup_by(|later, earlier| {
+            let same = later.instruction_idx == earlier.instruction_idx
+                && later.precision_bucket == earlier.precision_bucket;
+            if same {
+                earlier.total_time_ms += later.total_time_ms;
+                earlier.count += later.count;
+            }
+            same
+        });
 
         self.last_bumps = bumps as u32;
         self.last_iterations = iterations as u32;

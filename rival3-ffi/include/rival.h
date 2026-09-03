@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include "mpfr.h"
 
-#define RIVAL_ABI_VERSION 2
+#define RIVAL_ABI_VERSION 3
 
 #define RIVAL_EXPR_INVALID UINT32_MAX
 
@@ -267,6 +267,8 @@ void rival_machine_free(struct RivalMachine *machine);
 uintptr_t rival_machine_instruction_count(const struct RivalMachine *machine);
 
 uintptr_t rival_machine_var_count(const struct RivalMachine *machine);
+
+bool rival_machine_any_nan_output(const struct RivalMachine *machine);
 
 uintptr_t rival_machine_expr_count(const struct RivalMachine *machine);
 

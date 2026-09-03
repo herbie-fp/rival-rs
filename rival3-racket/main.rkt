@@ -101,8 +101,14 @@
 (define _profile-summary (_list-struct _pointer _size _uint32 _uint32))
 (define _execution-record (_list-struct _int32 _uint32 _double _uint32))
 (define execution-record-size (ctype-sizeof _execution-record))
+(define execution-precision-offset (ctype-sizeof _int32))
+(define execution-time-offset (ctype-sizeof _double))
+(define execution-iteration-offset (* 2 (ctype-sizeof _double)))
 (define _aggregated-entry (_list-struct _int32 _uint32 _double _size))
 (define aggregated-entry-size (ctype-sizeof _aggregated-entry))
+(define aggregated-precision-offset (ctype-sizeof _int32))
+(define aggregated-time-offset (ctype-sizeof _double))
+(define aggregated-count-offset (* 2 (ctype-sizeof _double)))
 
 (define _rival-profiling-mode (_enum '(off = 0 on = 1) _uint32))
 (define _rival-disc-type (_enum '(bool = 0 f32 = 1 f64 = 2) _uint32))
@@ -155,15 +161,15 @@
 (define-rival rival_machine_instruction_count (_fun _pointer -> _size))
 (define-rival rival_machine_iterations (_fun _pointer -> _uint32))
 (define-rival rival_machine_bumps (_fun _pointer -> _uint32))
+(define-rival rival_machine_any_nan_output (_fun _pointer -> _stdbool))
 (define-rival rival_machine_set_profiling (_fun _pointer _rival-profiling-mode -> _void))
 (define-rival rival_machine_get_profiling (_fun _pointer -> _rival-profiling-mode))
 
 (define-rival rival_apply
-              (_fun _pointer _pointer _size _pointer _size _pointer _size _stdbool
-                    -> _rival-error))
+              (_fun _pointer _pointer _size _pointer _size _pointer _size _stdbool -> _int32))
 
 (define-rival rival_apply_baseline
-              (_fun _pointer _pointer _size _pointer _size _pointer _stdbool -> _rival-error))
+              (_fun _pointer _pointer _size _pointer _size _pointer _stdbool -> _int32))
 
 (define-rival rival_analyze_with_hints
               (_fun _pointer _pointer _size _pointer _stdbool -> _analyze-result))
@@ -171,7 +177,6 @@
               (_fun _pointer _pointer _size _pointer _stdbool -> _analyze-result))
 
 (define-rival rival_hints_free (_fun _pointer -> _void))
-(define-rival rival_hints_len (_fun _pointer -> _size))
 
 (define-rival rival_profiler_reset (_fun _pointer -> _void))
 (define-rival rival_profiler_aggregate (_fun _pointer _uint32 -> _profile-summary))
@@ -182,8 +187,8 @@
               (_fun _pointer (out : (_ptr o _size)) -> (ptr : _pointer) -> (values ptr out)))
 
 (let ([v (rival_version)])
-  (unless (= v 2)
-    (error 'rival3 "ABI version mismatch: expected 2, got ~a" v)))
+  (unless (= v 3)
+    (error 'rival3 "ABI version mismatch: expected 3, got ~a" v)))
 
 (struct machine-wrapper
         ([ptr #:mutable] n-vars n-exprs n-instrs discs arg-buf arg-bfs out-buf out-bfs rect-buf
@@ -480,19 +485,24 @@
   (define out-bfs (machine-wrapper-out-bfs machine))
   (define out-ptrs (machine-wrapper-out-buf machine))
   (define hints-ptr (and hints (hints-wrapper-ptr hints)))
-  (define status-code
-    (ffi-fn (machine-wrapper-ptr machine) arg-ptrs n-args out-ptrs n-outs hints-ptr require-all?))
-  (match status-code
-    ['ok
+  (define machine-ptr (machine-wrapper-ptr machine))
+  (define status-code (ffi-fn machine-ptr arg-ptrs n-args out-ptrs n-outs hints-ptr require-all?))
+  (case status-code
+    [(0)
      (define discs (machine-wrapper-discs machine))
-     (for/vector #:length n-outs
-                 ([bf (in-vector out-bfs)]
-                  [disc (in-list discs)])
-       (if (bfnan? bf)
-           'invalid
+     (if (rival_machine_any_nan_output machine-ptr)
+         (for/vector #:length n-outs
+                     ([bf (in-vector out-bfs)]
+                      [disc (in-list discs)])
+           (if (bfnan? bf)
+               'invalid
+               ((discretization-convert disc) bf)))
+         (for/vector #:length n-outs
+                     ([bf (in-vector out-bfs)]
+                      [disc (in-list discs)])
            ((discretization-convert disc) bf)))]
-    ['invalid_input (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt))]
-    ['unsamplable (raise (exn:rival:unsamplable "Unsamplable input" (current-continuation-marks) pt))]
+    [(-1) (raise (exn:rival:invalid "Invalid input" (current-continuation-marks) pt))]
+    [(-2) (raise (exn:rival:unsamplable "Unsamplable input" (current-continuation-marks) pt))]
     [else (error error-name "Unknown result code: ~a" status-code)]))
 
 (define (rival-apply machine pt [hints #f])
@@ -543,7 +553,7 @@
     (cond
       [(not hints-ptr) #f]
       [keep-hints?
-       (define wrapper (hints-wrapper hints-ptr (rival_hints_len hints-ptr)))
+       (define wrapper (hints-wrapper hints-ptr (machine-wrapper-n-instrs machine)))
        (register-finalizer wrapper hints-destroy)
        wrapper]
       [else
@@ -598,9 +608,14 @@
         (define names (machine-wrapper-name-table machine))
         (for/vector #:length len
                     ([i (in-range len)])
-          (define rec-ptr (ptr-add ptr (* i execution-record-size)))
-          (match-define (list instr-idx prec time-ms iter) (ptr-ref rec-ptr _execution-record))
-          (execution (instruction-name names instr-idx) instr-idx prec time-ms 0 iter))])]
+          (define base (* i execution-record-size))
+          (define instr-idx (ptr-ref ptr _int32 'abs base))
+          (execution (instruction-name names instr-idx)
+                     instr-idx
+                     (ptr-ref ptr _uint32 'abs (+ base execution-precision-offset))
+                     (ptr-ref ptr _double 'abs (+ base execution-time-offset))
+                     0
+                     (ptr-ref ptr _uint32 'abs (+ base execution-iteration-offset))))])]
     ['summary
      (define bucket-size (max 1 (quotient (*rival-max-precision*) 25)))
      (match-define (list entries-ptr entries-len bumps iterations)
@@ -611,10 +626,11 @@
            (vector)
            (for/vector #:length entries-len
                        ([i (in-range entries-len)])
-             (define entry-ptr (ptr-add entries-ptr (* i aggregated-entry-size)))
-             (match-define (list instr-idx prec-bucket time-ms count)
-               (ptr-ref entry-ptr _aggregated-entry))
-             (list (instruction-name names instr-idx) prec-bucket time-ms count))))
+             (define base (* i aggregated-entry-size))
+             (list (instruction-name names (ptr-ref entries-ptr _int32 'abs base))
+                   (ptr-ref entries-ptr _uint32 'abs (+ base aggregated-precision-offset))
+                   (ptr-ref entries-ptr _double 'abs (+ base aggregated-time-offset))
+                   (ptr-ref entries-ptr _size 'abs (+ base aggregated-count-offset))))))
      (list summary bumps iterations)]))
 
 (define (rival-set-profiling! machine enabled)

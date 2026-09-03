@@ -51,6 +51,11 @@ impl Discretization for RivalDiscretization {
 
     #[inline]
     fn distance(&self, idx: usize, lo: &Float, hi: &Float) -> usize {
+        self.converted_distance(idx, lo, hi)
+    }
+
+    #[inline]
+    fn converted_distance(&self, idx: usize, lo: &Float, hi: &Float) -> usize {
         let disc_type = self.types.get(idx).copied().unwrap_or(RivalDiscType::F64);
 
         match disc_type {

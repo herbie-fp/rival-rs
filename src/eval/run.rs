@@ -19,6 +19,49 @@ pub enum OutputPolicy {
     AllowPartial,
 }
 
+/// The output intervals of a successful evaluation, borrowed from the machine.
+pub struct Outputs<'a> {
+    registers: &'a [Ival],
+    outputs: &'a [usize],
+}
+
+impl<'a> Outputs<'a> {
+    /// Number of outputs.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.outputs.len()
+    }
+
+    /// Whether there are no outputs.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.outputs.is_empty()
+    }
+
+    /// The interval computed for output `index`.
+    #[inline]
+    pub fn get(&self, index: usize) -> &'a Ival {
+        &self.registers[self.outputs[index]]
+    }
+
+    /// Iterate over the output intervals in order.
+    pub fn iter(&self) -> impl Iterator<Item = &'a Ival> + '_ {
+        self.outputs.iter().map(move |&root| &self.registers[root])
+    }
+}
+
+/// The result of analyzing an input rectangle.
+pub struct Analysis {
+    /// The rectangle definitely produces an error.
+    pub is_error: bool,
+    /// The rectangle possibly produces an error.
+    pub maybe_error: bool,
+    /// Hints for subsequent evaluations on points in the rectangle.
+    pub hints: Vec<Hint>,
+    /// Whether the analysis has converged.
+    pub converged: bool,
+}
+
 impl<D: Discretization> Machine<D> {
     /// Evaluate the compiled real expressions on an input point
     /// represented as a slice of intervals.
@@ -52,22 +95,52 @@ impl<D: Discretization> Machine<D> {
         max_iterations: usize,
         policy: OutputPolicy,
     ) -> Result<Vec<Ival>, RivalError> {
-        self.load_arguments(args);
-        let hint_storage;
-        let hint_slice: &[Hint] = if let Some(h) = hint {
-            h
-        } else {
-            hint_storage = self.default_hint.clone();
-            &hint_storage
-        };
+        self.apply_borrowed(args, hint, max_iterations, policy)
+            .map(|outputs| outputs.iter().cloned().collect())
+    }
 
-        for iteration in 0..max_iterations {
-            if let Some(results) = self.run_iteration(iteration, hint_slice, policy)? {
-                return Ok(results);
+    /// Evaluate like [`Machine::apply`], but borrow the outputs from the
+    /// machine's registers instead of copying them.
+    pub fn apply_borrowed(
+        &mut self,
+        args: &[Ival],
+        hint: Option<&[Hint]>,
+        max_iterations: usize,
+        policy: OutputPolicy,
+    ) -> Result<Outputs<'_>, RivalError> {
+        self.load_arguments(args);
+        self.with_hints(hint, |machine, hints| {
+            for iteration in 0..max_iterations {
+                if machine.run_iteration(iteration, hints, policy)? {
+                    return Ok(());
+                }
+            }
+            Err(RivalError::Unsamplable)
+        })?;
+        Ok(self.outputs())
+    }
+
+    fn outputs(&self) -> Outputs<'_> {
+        Outputs {
+            registers: &self.registers,
+            outputs: &self.outputs,
+        }
+    }
+
+    fn with_hints<R>(
+        &mut self,
+        hint: Option<&[Hint]>,
+        f: impl FnOnce(&mut Self, &[Hint]) -> R,
+    ) -> R {
+        match hint {
+            Some(hints) => f(self, hints),
+            None => {
+                let default = std::mem::take(&mut self.default_hint);
+                let result = f(self, &default);
+                self.default_hint = default;
+                result
             }
         }
-
-        Err(RivalError::Unsamplable)
     }
 
     /// Evaluate the machine using the baseline strategy.
@@ -85,37 +158,41 @@ impl<D: Discretization> Machine<D> {
         hint: Option<&[Hint]>,
         policy: OutputPolicy,
     ) -> Result<Vec<Ival>, RivalError> {
+        self.apply_baseline_borrowed(args, hint, policy)
+            .map(|outputs| outputs.iter().cloned().collect())
+    }
+
+    /// Evaluate like [`Machine::apply_baseline`], but borrow the outputs
+    /// from the machine's registers instead of copying them.
+    pub fn apply_baseline_borrowed(
+        &mut self,
+        args: &[Ival],
+        hint: Option<&[Hint]>,
+        policy: OutputPolicy,
+    ) -> Result<Outputs<'_>, RivalError> {
         self.load_arguments(args);
+        self.with_hints(hint, |machine, hints| {
+            let start_prec = machine.disc.target().saturating_add(10);
+            let mut prec = start_prec;
+            let mut iter: usize = 0;
 
-        let hint_storage;
-        let hint_slice: &[Hint] = if let Some(h) = hint {
-            h
-        } else {
-            hint_storage = self.default_hint.clone();
-            &hint_storage
-        };
+            loop {
+                machine.iteration = iter;
+                machine.baseline_adjust(prec);
+                machine.run_with_hint(hints);
 
-        let start_prec = self.disc.target().saturating_add(10);
-        let mut prec = start_prec;
-        let mut iter: usize = 0;
-
-        loop {
-            self.iteration = iter;
-            self.baseline_adjust(prec);
-            self.run_with_hint(hint_slice);
-
-            match self.collect_outputs(policy)? {
-                Some(outputs) => return Ok(outputs),
-                None => {
-                    let next = prec.saturating_mul(2);
-                    if next > self.max_precision {
-                        return Err(RivalError::Unsamplable);
-                    }
-                    prec = next;
-                    iter = iter.saturating_add(1);
+                if machine.collect_outputs(policy)? {
+                    return Ok(());
                 }
+                let next = prec.saturating_mul(2);
+                if next > machine.max_precision {
+                    return Err(RivalError::Unsamplable);
+                }
+                prec = next;
+                iter = iter.saturating_add(1);
             }
-        }
+        })?;
+        Ok(self.outputs())
     }
 
     /// Analyze an input rectangle using the baseline strategy,
@@ -129,25 +206,35 @@ impl<D: Discretization> Machine<D> {
         hint: Option<&[Hint]>,
         policy: OutputPolicy,
     ) -> (Ival, Vec<Hint>, bool) {
+        analysis_triple(self.analyze_baseline_hints(rect, hint, policy))
+    }
+
+    /// Analyze like [`Machine::analyze_baseline_with_hints`], returning
+    /// the status as plain flags.
+    pub fn analyze_baseline_hints(
+        &mut self,
+        rect: &[Ival],
+        hint: Option<&[Hint]>,
+        policy: OutputPolicy,
+    ) -> Analysis {
         self.load_arguments(rect);
+        self.with_hints(hint, |machine, hints| {
+            machine.iteration = 0;
+            machine.baseline_adjust(machine.disc.target().saturating_add(10));
+            machine.run_with_hint(hints);
+            machine.analysis(hints, policy)
+        })
+    }
 
-        let tmp;
-        let hint_slice = if let Some(h) = hint {
-            h
-        } else {
-            tmp = self.default_hint.clone();
-            &tmp
-        };
-
-        self.iteration = 0;
-        self.baseline_adjust(self.disc.target().saturating_add(10));
-        self.run_with_hint(hint_slice);
-
+    fn analysis(&mut self, hints: &[Hint], policy: OutputPolicy) -> Analysis {
         let (good, _done, bad, stuck) = self.return_flags(policy);
-        let (next_hint, converged) = self.make_hint(hint_slice);
-
-        let status = Ival::bool_interval(bad || stuck, (!good) || stuck);
-        (status, next_hint, converged)
+        let (next_hint, converged) = self.make_hint(hints);
+        Analysis {
+            is_error: bad || stuck,
+            maybe_error: (!good) || stuck,
+            hints: next_hint,
+            converged,
+        }
     }
 
     /// Analyze a hyper-rectangle using the baseline strategy and
@@ -165,7 +252,7 @@ impl<D: Discretization> Machine<D> {
         iteration: usize,
         hints: &[Hint],
         policy: OutputPolicy,
-    ) -> Result<Option<Vec<Ival>>, RivalError> {
+    ) -> Result<bool, RivalError> {
         assert_eq!(hints.len(), self.instructions.len(), "hint length mismatch");
         self.iteration = iteration;
         if self.adjust(hints) {
@@ -194,27 +281,24 @@ impl<D: Discretization> Machine<D> {
         hint: Option<&[Hint]>,
         policy: OutputPolicy,
     ) -> (Ival, Vec<Hint>, bool) {
+        analysis_triple(self.analyze_hints(rect, hint, policy))
+    }
+
+    /// Analyze like [`Machine::analyze_with_hints`], returning the status
+    /// as plain flags.
+    pub fn analyze_hints(
+        &mut self,
+        rect: &[Ival],
+        hint: Option<&[Hint]>,
+        policy: OutputPolicy,
+    ) -> Analysis {
         self.load_arguments(rect);
-
-        // Use provided hint or default.
-        let tmp;
-        let hint_slice = if let Some(h) = hint {
-            h
-        } else {
-            tmp = self.default_hint.clone();
-            &tmp
-        };
-
-        // One analysis iteration at sampling iteration 0.
-        self.iteration = 0;
-        self.adjust(hint_slice);
-        self.run_with_hint(hint_slice);
-
-        let (good, _done, bad, stuck) = self.return_flags(policy);
-        let (next_hint, converged) = self.make_hint(hint_slice);
-
-        let status = Ival::bool_interval(bad || stuck, (!good) || stuck);
-        (status, next_hint, converged)
+        self.with_hints(hint, |machine, hints| {
+            machine.iteration = 0;
+            machine.adjust(hints);
+            machine.run_with_hint(hints);
+            machine.analysis(hints, policy)
+        })
     }
 
     /// Analyze a hyper-rectangle and return only the boolean interval status.
@@ -231,8 +315,8 @@ impl<D: Discretization> Machine<D> {
     /// Load argument intervals into the front of the register file.
     pub(crate) fn load_arguments(&mut self, args: &[Ival]) {
         assert_eq!(args.len(), self.arguments.len(), "Argument count mismatch");
-        for (i, arg) in args.iter().cloned().enumerate() {
-            self.registers[i] = arg;
+        for (register, arg) in self.registers.iter_mut().zip(args) {
+            register.assign_from(arg);
         }
         self.bumps = 0;
         self.bumps_activated = false;
@@ -299,7 +383,7 @@ impl<D: Discretization> Machine<D> {
                 }
                 // Use pre-computed boolean value.
                 Hint::KnownBool(value) => {
-                    self.registers[out_reg] = Ival::bool_interval(*value, *value);
+                    self.registers[out_reg].set_bool(*value, *value);
                 }
             }
         }
@@ -382,26 +466,21 @@ impl<D: Discretization> Machine<D> {
         }
     }
 
-    /// Gather outputs and translate evaluation state into convergence results.
-    fn collect_outputs(&mut self, policy: OutputPolicy) -> Result<Option<Vec<Ival>>, RivalError> {
+    /// Translate evaluation state into convergence results.
+    fn collect_outputs(&mut self, policy: OutputPolicy) -> Result<bool, RivalError> {
         let (good, done, bad, stuck) = self.return_flags(policy);
-        let mut outputs = Vec::with_capacity(self.outputs.len());
-
-        for &root in &self.outputs {
-            outputs.push(self.registers[root].clone());
-        }
 
         if bad {
             return Err(RivalError::InvalidInput);
         }
         if done && good {
-            return Ok(Some(outputs));
+            return Ok(true);
         }
         if stuck {
             return Err(RivalError::Unsamplable);
         }
 
-        Ok(None)
+        Ok(false)
     }
 
     /// Compute (good, done, bad, stuck) flags and update output_distance.
@@ -433,9 +512,9 @@ impl<D: Discretization> Machine<D> {
                 done = false;
             }
 
-            let lo = self.disc.convert(idx, value.lo.as_float());
-            let hi = self.disc.convert(idx, value.hi.as_float());
-            let dist = self.disc.distance(idx, &lo, &hi);
+            let dist = self
+                .disc
+                .converted_distance(idx, value.lo.as_float(), value.hi.as_float());
             self.output_distance[idx] = dist == 1;
             if dist != 0 {
                 done = false;
@@ -447,6 +526,11 @@ impl<D: Discretization> Machine<D> {
 
         (good, done, bad, stuck)
     }
+}
+
+fn analysis_triple(analysis: Analysis) -> (Ival, Vec<Hint>, bool) {
+    let status = Ival::bool_interval(analysis.is_error, analysis.maybe_error);
+    (status, analysis.hints, analysis.converged)
 }
 
 /// Errors that can occur during [`Machine::apply`].

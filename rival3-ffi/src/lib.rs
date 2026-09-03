@@ -34,7 +34,7 @@ impl RivalError {
     }
 }
 
-pub const RIVAL_ABI_VERSION: u32 = 2;
+pub const RIVAL_ABI_VERSION: u32 = 3;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rival_version() -> u32 {

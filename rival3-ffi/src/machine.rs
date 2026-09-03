@@ -5,7 +5,7 @@ use crate::hints::RivalHints;
 use crate::profile::{ProfileCache, RivalExecution, RivalProfileSummary};
 use gmp_mpfr_sys::mpfr::{self, mpfr_t};
 use rival::{
-    ErrorFlags, Hint, Ival, Machine, MachineBuilder, OutputPolicy, RivalError as CoreError,
+    ErrorFlags, Hint, Ival, Machine, MachineBuilder, OutputPolicy, Outputs, RivalError as CoreError,
 };
 use rug::Float;
 use std::ptr;
@@ -19,6 +19,7 @@ pub struct RivalMachine {
     pub(crate) instruction_names_cache: Vec<u8>,
     pub(crate) n_vars: usize,
     pub(crate) n_exprs: usize,
+    pub(crate) any_nan_output: bool,
 }
 
 #[repr(u32)]
@@ -93,9 +94,9 @@ unsafe fn marshal_point_args(
     for (i, &ptr) in arg_ptrs.iter().enumerate() {
         let ival = &mut buf[i];
         let src_prec = unsafe { mpfr::get_prec(ptr) };
-        ival.lo_mut().set_prec(src_prec as u32);
-        ival.hi_mut().set_prec(src_prec as u32);
         unsafe {
+            mpfr::set_prec(ival.lo_mut().as_raw_mut(), src_prec);
+            mpfr::set_prec(ival.hi_mut().as_raw_mut(), src_prec);
             mpfr::set(ival.lo_mut().as_raw_mut(), ptr, mpfr::rnd_t::RNDN);
             mpfr::set(ival.hi_mut().as_raw_mut(), ptr, mpfr::rnd_t::RNDN);
         }
@@ -129,15 +130,14 @@ unsafe fn marshal_rect_args(
         let lo_ptr = rect_ptrs[2 * i];
         let hi_ptr = rect_ptrs[2 * i + 1];
 
-        let lo_prec = unsafe { mpfr::get_prec(lo_ptr) } as u32;
-        let hi_prec = unsafe { mpfr::get_prec(hi_ptr) } as u32;
+        let lo_prec = unsafe { mpfr::get_prec(lo_ptr) };
+        let hi_prec = unsafe { mpfr::get_prec(hi_ptr) };
         let prec = lo_prec.max(hi_prec);
 
         let ival = &mut buf[i];
-        ival.lo_mut().set_prec(prec);
-        ival.hi_mut().set_prec(prec);
-
         unsafe {
+            mpfr::set_prec(ival.lo_mut().as_raw_mut(), prec);
+            mpfr::set_prec(ival.hi_mut().as_raw_mut(), prec);
             mpfr::set(ival.lo_mut().as_raw_mut(), lo_ptr, mpfr::rnd_t::RNDN);
             mpfr::set(ival.hi_mut().as_raw_mut(), hi_ptr, mpfr::rnd_t::RNDN);
         }
@@ -162,15 +162,15 @@ unsafe fn marshal_rect_args(
 
 #[inline]
 unsafe fn write_outputs(
-    outputs: &[Ival],
+    outputs: Outputs<'_>,
     out: *const *mut mpfr_t,
     n_out: usize,
-) -> Result<(), RivalError> {
+) -> Result<bool, RivalError> {
     if outputs.len() != n_out {
         return Err(RivalError::InvalidInput);
     }
     if n_out == 0 {
-        return Ok(());
+        return Ok(false);
     }
     let out_ptrs = unsafe { slice::from_raw_parts(out, n_out) };
     for &out_ptr in out_ptrs.iter() {
@@ -178,14 +178,17 @@ unsafe fn write_outputs(
             return Err(RivalError::InvalidInput);
         }
     }
+    let mut any_nan = false;
     for (i, val) in outputs.iter().enumerate() {
         if val.error_flags().total() {
             unsafe { mpfr::set_nan(out_ptrs[i]) };
+            any_nan = true;
         } else {
             unsafe { mpfr::set(out_ptrs[i], val.lo().as_raw(), mpfr::rnd_t::RNDN) };
+            any_nan |= val.lo().is_nan();
         }
     }
-    Ok(())
+    Ok(any_nan)
 }
 
 #[inline]
@@ -200,6 +203,7 @@ unsafe fn apply_inner(
     max_iterations: Option<usize>,
     require_all_outputs: bool,
 ) -> RivalError {
+    wrapper.any_nan_output = false;
     if n_args != wrapper.n_vars || n_out != wrapper.n_exprs {
         return RivalError::InvalidInput;
     }
@@ -220,15 +224,18 @@ unsafe fn apply_inner(
     let result = match max_iterations {
         Some(iters) => wrapper
             .machine
-            .apply(&wrapper.arg_buf, hints_opt, iters, policy),
+            .apply_borrowed(&wrapper.arg_buf, hints_opt, iters, policy),
         None => wrapper
             .machine
-            .apply_baseline(&wrapper.arg_buf, hints_opt, policy),
+            .apply_baseline_borrowed(&wrapper.arg_buf, hints_opt, policy),
     };
 
     match result {
-        Ok(outputs) => match unsafe { write_outputs(&outputs, out, n_out) } {
-            Ok(()) => RivalError::Ok,
+        Ok(outputs) => match unsafe { write_outputs(outputs, out, n_out) } {
+            Ok(any_nan) => {
+                wrapper.any_nan_output = any_nan;
+                RivalError::Ok
+            }
             Err(e) => e,
         },
         Err(CoreError::InvalidInput) => RivalError::InvalidInput,
@@ -260,22 +267,24 @@ unsafe fn analyze_inner(
     let hints_opt = unsafe { extract_hints(hints) };
 
     let policy = output_policy(require_all_outputs);
-    let (status, next_hints, converged) = if baseline {
+    let analysis = if baseline {
         wrapper
             .machine
-            .analyze_baseline_with_hints(&wrapper.rect_buf, hints_opt, policy)
+            .analyze_baseline_hints(&wrapper.rect_buf, hints_opt, policy)
     } else {
         wrapper
             .machine
-            .analyze_with_hints(&wrapper.rect_buf, hints_opt, policy)
+            .analyze_hints(&wrapper.rect_buf, hints_opt, policy)
     };
 
     RivalAnalyzeResult {
         error: RivalError::Ok,
-        is_error: !status.lo().is_zero(),
-        maybe_error: !status.hi().is_zero(),
-        converged,
-        hints: Box::into_raw(Box::new(RivalHints { hints: next_hints })),
+        is_error: analysis.is_error,
+        maybe_error: analysis.maybe_error,
+        converged: analysis.converged,
+        hints: Box::into_raw(Box::new(RivalHints {
+            hints: analysis.hints,
+        })),
     }
 }
 
@@ -335,6 +344,7 @@ pub unsafe extern "C" fn rival_machine_new(
             instruction_names_cache: Vec::new(),
             n_vars,
             n_exprs,
+            any_nan_output: false,
         }))
     }
 }
@@ -361,6 +371,15 @@ pub unsafe extern "C" fn rival_machine_var_count(machine: *const RivalMachine) -
         0
     } else {
         unsafe { (*machine).n_vars }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rival_machine_any_nan_output(machine: *const RivalMachine) -> bool {
+    if machine.is_null() {
+        false
+    } else {
+        unsafe { (*machine).any_nan_output }
     }
 }
 
@@ -527,10 +546,9 @@ pub unsafe extern "C" fn rival_profiler_aggregate(
     if records.is_empty() {
         wrapper.profile_cache.summary_from_cache()
     } else {
-        let summary =
-            wrapper
-                .profile_cache
-                .aggregate_from(records.iter(), bucket_size, bumps, iterations);
+        let summary = wrapper
+            .profile_cache
+            .aggregate_from(records, bucket_size, bumps, iterations);
         wrapper.machine.clear_executions();
         summary
     }

@@ -13,9 +13,7 @@ pub fn evaluate_instruction(instruction: &Instruction, registers: &mut [Ival], p
     // Split registers so we can mutate out_reg while reading inputs.
     let (before, rest) = registers.split_at_mut(out);
     let (out_reg, after) = rest.split_first_mut().expect("Invalid register index");
-    // Set the register's working precision before evaluating the instruction because all
-    // registers are by default allocated to max precision.
-    out_reg.set_prec(precision);
+    out_reg.set_prec_raw(precision);
 
     // Helper to access any register despite the split.
     let get_reg = |idx: usize| -> &Ival {
@@ -29,7 +27,7 @@ pub fn evaluate_instruction(instruction: &Instruction, registers: &mut [Ival], p
     match &instruction.data {
         Literal { value } => {
             let val = &value.0;
-            out_reg.set_prec(precision.max(val.prec()));
+            out_reg.set_prec_raw(precision.max(val.prec()));
             out_reg.lo.as_float_mut().assign_round(val, Round::Down);
             out_reg.hi.as_float_mut().assign_round(val, Round::Up);
             out_reg.err = if val.is_finite() {

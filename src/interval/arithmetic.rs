@@ -1,6 +1,7 @@
+use super::scratch::{with_ival, with_ival2};
 use super::value::{Endpoint, Ival, IvalClass, classify};
 use crate::{
-    interval::core::endpoint_binary,
+    interval::core::{Share, apply_binary, endpoint_binary},
     mpfr::{mpfr_add, mpfr_div, mpfr_hypot, mpfr_mul, mpfr_sub},
 };
 use rug::{Assign, Float, float::Round, ops::AssignRound};
@@ -61,10 +62,11 @@ impl Ival {
             (IvalClass::Mix, IvalClass::Pos) => mkmul(self, &a.lo, &b.hi, &a.hi, &b.hi),
             (IvalClass::Mix, IvalClass::Neg) => mkmul(self, &a.hi, &b.lo, &a.lo, &b.lo),
             (IvalClass::Mix, IvalClass::Mix) => {
-                let mut tmp_ival = self.clone();
                 mkmul(self, &a.hi, &b.lo, &a.lo, &b.lo);
-                mkmul(&mut tmp_ival, &a.lo, &b.hi, &a.hi, &b.hi);
-                self.union_assign(tmp_ival);
+                with_ival(self.prec(), |tmp| {
+                    mkmul(tmp, &a.lo, &b.hi, &a.hi, &b.hi);
+                    self.union_with(tmp);
+                });
             }
         }
     }
@@ -120,40 +122,35 @@ impl Ival {
 
     /// Compute the interval fused multiply-add `a * b + c`.
     pub fn fma_assign(&mut self, a: &Ival, b: &Ival, c: &Ival) {
-        let mut product = Ival::zero(self.prec());
-        product.mul_assign(a, b);
-        self.add_assign(&product, c);
+        with_ival(self.prec(), |product| {
+            product.mul_assign(a, b);
+            self.add_assign(product, c);
+        });
     }
 
     /// Compute the interval positive difference `fdim(x, y) = max(x - y, 0)`.
     pub fn fdim_assign(&mut self, x: &Ival, y: &Ival) {
-        let mut diff = Ival::zero(self.prec());
-        diff.sub_assign(x, y);
-        let zero_ival = Ival::zero(self.prec());
-        self.fmax_assign(&diff, &zero_ival);
+        with_ival2(self.prec(), |diff, zero_ival| {
+            diff.sub_assign(x, y);
+            self.fmax_assign(diff, zero_ival);
+        });
     }
 
     /// Compute the interval Euclidean distance `hypot(x, y) = sqrt(x^2 + y^2)`.
     pub fn hypot_assign(&mut self, x: &Ival, y: &Ival) {
-        let mut abs_x = Ival::zero(self.prec());
-        let mut abs_y = Ival::zero(self.prec());
-        abs_x.pre_fabs_assign(x);
-        abs_y.pre_fabs_assign(y);
-
-        self.lo.immovable = endpoint_binary(
-            mpfr_hypot,
-            &abs_x.lo,
-            &abs_y.lo,
-            self.lo.as_float_mut(),
-            Round::Down,
-        );
-        self.hi.immovable = endpoint_binary(
-            mpfr_hypot,
-            &abs_x.hi,
-            &abs_y.hi,
-            self.hi.as_float_mut(),
-            Round::Up,
-        );
+        with_ival2(self.prec(), |abs_x, abs_y| {
+            abs_x.pre_fabs_assign(x);
+            abs_y.pre_fabs_assign(y);
+            apply_binary(
+                &mpfr_hypot,
+                &abs_x.lo,
+                &abs_y.lo,
+                &abs_x.hi,
+                &abs_y.hi,
+                self,
+                Share::Algebraic,
+            );
+        });
         self.err = x.err.union(&y.err);
     }
 }
@@ -176,7 +173,7 @@ fn epmul(
             || (ep1.immovable && ep2.immovable);
     }
 
-    let exact = mpfr_mul(a, b, out, rnd);
+    let exact = mpfr_mul(a, b, out, rnd) == 0;
     (ep1.immovable && ep2.immovable && exact)
         || (ep1.immovable && a.is_infinite() && !matches!(class2, IvalClass::Mix))
         || (ep2.immovable && b.is_infinite() && !matches!(class1, IvalClass::Mix))
@@ -186,7 +183,7 @@ fn epdiv(ep1: &Endpoint, ep2: &Endpoint, class: IvalClass, out: &mut Float, rnd:
     let a = ep1.as_float();
     let b = ep2.as_float();
 
-    let exact = mpfr_div(a, b, out, rnd);
+    let exact = mpfr_div(a, b, out, rnd) == 0;
 
     (ep1.immovable && ep2.immovable && exact)
         || (ep1.immovable && (a.is_zero() || a.is_infinite()))

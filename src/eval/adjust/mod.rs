@@ -72,6 +72,36 @@ impl<D: Discretization> Machine<D> {
 /// Compute required precision for each instruction by propagating from outputs to inputs
 fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) -> bool {
     let instruction_count = machine.instructions.len();
+    let mut vprecs_max = std::mem::take(&mut machine.scratch_precs_max);
+    let mut vprecs_min = std::mem::take(&mut machine.scratch_precs_min);
+    let mut work_repeats = std::mem::take(&mut machine.scratch_repeats);
+    vprecs_max.clear();
+    vprecs_max.resize(instruction_count, 0);
+    vprecs_min.clear();
+    vprecs_min.resize(instruction_count, 0);
+    work_repeats.clear();
+    work_repeats.resize(instruction_count, true);
+    let stop = backward_pass_inner(
+        machine,
+        hints,
+        &mut vprecs_max,
+        &mut vprecs_min,
+        &mut work_repeats,
+    );
+    machine.scratch_precs_max = vprecs_max;
+    machine.scratch_precs_min = vprecs_min;
+    machine.scratch_repeats = work_repeats;
+    stop
+}
+
+fn backward_pass_inner<D: Discretization>(
+    machine: &mut Machine<D>,
+    hints: &[Hint],
+    vprecs_max: &mut [u32],
+    vprecs_min: &mut [u32],
+    work_repeats: &mut [bool],
+) -> bool {
+    let instruction_count = machine.instructions.len();
     let profiling = machine.profiling_enabled;
     let start_time = if profiling {
         Some(std::time::Instant::now())
@@ -79,9 +109,6 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
         None
     };
     let first_tuning_pass = machine.iteration == 1;
-
-    let mut vprecs_max = vec![0u32; instruction_count];
-    let mut work_repeats = vec![true; instruction_count];
 
     // Step 1: Add slack bits to outputs that hit discretization boundaries.
     // Slack grows exponentially with iteration to push intervals away from boundaries.
@@ -122,20 +149,12 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
     }
 
     // Step 2: Precision tuning.
-    let mut vprecs_min = vec![0u32; instruction_count];
-    if precision_tuning(
-        machine,
-        hints,
-        &work_repeats,
-        &mut vprecs_max,
-        &mut vprecs_min,
-    ) {
+    if precision_tuning(machine, hints, work_repeats, vprecs_max, vprecs_min) {
         return true;
     }
 
     // Step 3: Update repeats based on new precisions.
-    let mut any_reevaluation =
-        update_repeats(machine, &mut work_repeats, &vprecs_max, first_tuning_pass);
+    let mut any_reevaluation = update_repeats(machine, work_repeats, vprecs_max, first_tuning_pass);
 
     // Step 4: If no precision increase, try logspan bumps.
     if !any_reevaluation {
@@ -145,25 +164,18 @@ fn backward_pass<D: Discretization>(machine: &mut Machine<D>, hints: &[Hint]) ->
         // Reset and recalculate precisions for bumps mode.
         vprecs_max.fill(0);
         work_repeats.fill(false);
-        if precision_tuning(
-            machine,
-            hints,
-            &work_repeats,
-            &mut vprecs_max,
-            &mut vprecs_min,
-        ) {
+        if precision_tuning(machine, hints, work_repeats, vprecs_max, vprecs_min) {
             return true;
         }
-        any_reevaluation =
-            update_repeats(machine, &mut work_repeats, &vprecs_max, first_tuning_pass);
+        any_reevaluation = update_repeats(machine, work_repeats, vprecs_max, first_tuning_pass);
         if !any_reevaluation {
             work_repeats.fill(true);
         }
     }
 
     // Step 5: Update machine state.
-    machine.repeats.copy_from_slice(&work_repeats);
-    machine.precisions.copy_from_slice(&vprecs_max);
+    machine.repeats.copy_from_slice(work_repeats);
+    machine.precisions.copy_from_slice(vprecs_max);
 
     if profiling && let Some(t0) = start_time {
         let dt_ms = t0.elapsed().as_secs_f64() * 1000.0;

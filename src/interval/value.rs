@@ -4,7 +4,7 @@ use rug::{
     ops::AssignRound,
 };
 
-use crate::mpfr::zero;
+use crate::mpfr::set_prec_raw;
 use rug::ops::NegAssign;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -104,6 +104,30 @@ impl Endpoint {
         self.val.as_float_mut()
     }
 
+    pub(crate) fn assign_endpoint(&mut self, b: &Endpoint) {
+        set_prec_raw(self.as_float_mut(), b.as_float().prec());
+        self.as_float_mut().assign(b.as_float());
+        self.immovable = b.immovable;
+    }
+
+    pub(crate) fn min_with(&mut self, b: &Endpoint) {
+        use std::cmp::Ordering;
+        match self.val.cmp(&b.val) {
+            Ordering::Less => (),
+            Ordering::Greater => self.assign_endpoint(b),
+            Ordering::Equal => self.immovable |= b.immovable,
+        }
+    }
+
+    pub(crate) fn max_with(&mut self, b: &Endpoint) {
+        use std::cmp::Ordering;
+        match self.val.cmp(&b.val) {
+            Ordering::Greater => (),
+            Ordering::Less => self.assign_endpoint(b),
+            Ordering::Equal => self.immovable |= b.immovable,
+        }
+    }
+
     pub(crate) fn endpoint_min2_assign(&mut self, b: Endpoint) {
         use std::cmp::Ordering;
         match self.val.cmp(&b.val) {
@@ -188,6 +212,30 @@ impl Ival {
         self.hi.as_float_mut().set_prec(prec);
     }
 
+    #[inline]
+    pub(crate) fn set_prec_raw(&mut self, prec: u32) {
+        set_prec_raw(self.lo.as_float_mut(), prec);
+        set_prec_raw(self.hi.as_float_mut(), prec);
+    }
+
+    pub(crate) fn reset_zero(&mut self, prec: u32) {
+        self.set_prec_raw(prec);
+        self.lo.as_float_mut().assign(0);
+        self.hi.as_float_mut().assign(0);
+        self.lo.immovable = true;
+        self.hi.immovable = true;
+        self.err = ErrorFlags::none();
+    }
+
+    pub(crate) fn set_bool(&mut self, lo_true: bool, hi_true: bool) {
+        self.set_prec_raw(2);
+        self.lo.as_float_mut().assign(if lo_true { 1 } else { 0 });
+        self.hi.as_float_mut().assign(if hi_true { 1 } else { 0 });
+        self.lo.immovable = true;
+        self.hi.immovable = true;
+        self.err = ErrorFlags::none();
+    }
+
     pub(crate) fn neg_inplace(&mut self) {
         self.lo.as_float_mut().neg_assign();
         self.hi.as_float_mut().neg_assign();
@@ -246,11 +294,9 @@ impl Ival {
     }
 
     pub(crate) fn assign_from(&mut self, src: &Ival) {
-        // Ensure precision.
         let src_prec = src.prec();
-        self.lo.as_float_mut().set_prec(src_prec);
-        self.hi.as_float_mut().set_prec(src_prec);
-        // Assign.
+        set_prec_raw(self.lo.as_float_mut(), src_prec);
+        set_prec_raw(self.hi.as_float_mut(), src_prec);
         self.lo.as_float_mut().assign(src.lo.as_float());
         self.lo.immovable = src.lo.immovable;
         self.hi.as_float_mut().assign(src.hi.as_float());
@@ -282,6 +328,25 @@ impl Ival {
         self.err = self.err.union_disjoint(&other.err);
     }
 
+    pub(crate) fn union_with(&mut self, other: &Ival) {
+        if self.err.total {
+            self.lo.assign_endpoint(&other.lo);
+            self.hi.assign_endpoint(&other.hi);
+            self.err = other.err;
+            self.err.partial = true;
+            return;
+        }
+
+        if other.err.total {
+            self.err.partial = true;
+            return;
+        }
+
+        self.lo.min_with(&other.lo);
+        self.hi.max_with(&other.hi);
+        self.err = self.err.union_disjoint(&other.err);
+    }
+
     /// Return Some(false) if interval is exactly [0,0], Some(true) if [1,1], else None.
     /// Returns None whenever there are error flags present.
     pub(crate) fn known_bool(&self) -> Option<bool> {
@@ -299,46 +364,20 @@ impl Ival {
         }
     }
 
-    // The following helpers mirror previous clamp logic.
-    pub(crate) fn clamp(&mut self, lo: Float, hi: Float) {
-        let x_lo = self.lo.as_float();
-        let x_hi = self.hi.as_float();
-
-        self.err = ErrorFlags::new(
-            self.err.partial || x_lo < &lo || x_hi > &hi,
-            self.err.total || x_hi < &lo || x_lo > &hi,
-        );
-
-        if lo.is_zero() && x_hi.is_zero() {
-            self.lo.val = OrdFloat::from(zero(self.prec()));
-            self.hi.val = OrdFloat::from(zero(self.prec()));
-        } else {
-            if x_lo < &lo {
-                self.lo.val = OrdFloat::from(lo)
-            }
-
-            if x_hi > &hi {
-                self.hi.val = OrdFloat::from(hi);
-            }
-        }
-    }
-
-    pub(crate) fn clamp_strict(&mut self, lo: Float, hi: Float) {
-        let x_lo = self.lo.as_float();
-        let x_hi = self.hi.as_float();
-
-        self.err = ErrorFlags::new(
-            self.err.partial || x_lo <= &lo || x_hi >= &hi,
-            self.err.total || x_hi <= &lo || x_lo >= &hi,
-        );
-
-        if x_lo < &lo {
-            self.lo.val = OrdFloat::from(lo)
-        }
-
-        if x_hi > &hi {
-            self.hi.val = OrdFloat::from(hi);
-        }
+    pub(crate) fn split_into(&self, val: &Float, lower: &mut Ival, upper: &mut Ival) {
+        let prec = self.prec();
+        lower.set_prec_raw(prec);
+        lower.lo.as_float_mut().assign(self.lo.as_float());
+        lower.lo.immovable = self.lo.immovable;
+        lower.hi.as_float_mut().assign(val);
+        lower.hi.immovable = self.hi.immovable;
+        lower.err = self.err;
+        upper.set_prec_raw(prec);
+        upper.lo.as_float_mut().assign(val);
+        upper.lo.immovable = self.lo.immovable;
+        upper.hi.as_float_mut().assign(self.hi.as_float());
+        upper.hi.immovable = self.hi.immovable;
+        upper.err = self.err;
     }
 
     /// Split an interval at a point, returning the two halves of that

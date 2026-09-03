@@ -1,4 +1,4 @@
-use super::core::endpoint_unary;
+use super::core::{Share, endpoint_unary};
 use super::value::{ErrorFlags, Ival};
 use crate::mpfr::{
     mpfr_add, mpfr_ceil, mpfr_div, mpfr_even, mpfr_floor, mpfr_integer, mpfr_lgamma, mpfr_log,
@@ -68,9 +68,9 @@ impl Ival {
     fn lgamma_pos_assign(&mut self, x: &Ival) {
         let prec = self.prec();
         if x.lo.as_float() >= &Float::with_val(prec, 1.5) {
-            self.monotonic_assign(&mpfr_lgamma, x);
+            self.monotonic_with(&mpfr_lgamma, x, Share::Transcendental);
         } else if x.lo.as_float() >= &zero(prec) && x.hi.as_float() <= &Float::with_val(prec, 1.4) {
-            self.comonotonic_assign(&mpfr_lgamma, x);
+            self.comonotonic_with(&mpfr_lgamma, x, Share::Transcendental);
         } else {
             let (min_x, min_y) = convex_find_min(
                 Float::with_val(prec, 1.46163),
@@ -157,11 +157,11 @@ impl Ival {
 
     fn convex_lgamma_assign(&mut self, x: &Ival, min_x: &Float, min_y: &Float) {
         if x.lo.as_float() > min_x {
-            self.monotonic_assign(&mpfr_lgamma, x);
+            self.monotonic_with(&mpfr_lgamma, x, Share::Transcendental);
             return;
         }
         if x.hi.as_float() < min_x {
-            self.comonotonic_assign(&mpfr_lgamma, x);
+            self.comonotonic_with(&mpfr_lgamma, x, Share::Transcendental);
             return;
         }
 

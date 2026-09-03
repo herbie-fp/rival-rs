@@ -27,6 +27,16 @@ pub trait Discretization: Clone {
     /// This last case triggers special behavior inside Rival
     /// to handle double-rounding issues.
     fn distance(&self, idx: usize, lo: &Float, hi: &Float) -> usize;
+    /// Convert both endpoints into this subset and measure their distance.
+    ///
+    /// The default implementation combines [`convert`](Discretization::convert)
+    /// and [`distance`](Discretization::distance); implementations may
+    /// override it to avoid intermediate allocations.
+    fn converted_distance(&self, idx: usize, lo: &Float, hi: &Float) -> usize {
+        let lo = self.convert(idx, lo);
+        let hi = self.convert(idx, hi);
+        self.distance(idx, &lo, &hi)
+    }
 }
 
 /// Interval evaluation machine with persistent state and discretization.
@@ -66,6 +76,10 @@ pub struct Machine<D: Discretization> {
 
     pub(crate) iteration: usize,
     pub(crate) bumps: usize, // Number of times bumps mode has been activated
+
+    pub(crate) scratch_precs_max: Vec<u32>,
+    pub(crate) scratch_precs_min: Vec<u32>,
+    pub(crate) scratch_repeats: Vec<bool>,
 
     // Profiling.
     pub(crate) profiler: Profiler,
@@ -232,6 +246,9 @@ impl<D: Discretization> MachineBuilder<D> {
             output_distance,
             iteration: 0,
             bumps: 0,
+            scratch_precs_max: vec![0u32; instruction_count],
+            scratch_precs_min: vec![0u32; instruction_count],
+            scratch_repeats: vec![true; instruction_count],
             max_precision: self.max_precision,
             min_precision: self.min_precision,
             lower_bound_early_stopping: false,
